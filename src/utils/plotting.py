@@ -25,6 +25,31 @@ pd.options.display.max_rows = None
 pd.set_option("display.float_format", lambda x: "%.2f" % x)
 
 
+def create_performance_measures_table(
+    data: pd.DataFrame, inflation_measure: str, performance_measures: list[str]
+) -> pd.DataFrame:
+
+    df_final_stats = data.groupby(inflation_measure)[performance_measures].describe()
+
+    final_stats_count = df_final_stats[(performance_measures[0], "count")].rename(
+        "percentage_participants"
+    )
+    final_stats_percent = final_stats_count / final_stats_count.sum()
+
+    stats_cols = [c for c in df_final_stats.columns if "mean" in c[1]]
+    df_final_stats = df_final_stats[stats_cols].reset_index()
+    df_final_stats.columns = df_final_stats.columns.droplevel(level=1)
+    df_final_stats = df_final_stats.assign(
+        percentage_participants=final_stats_percent.values
+    )
+    stats_cols = df_final_stats.columns.to_list()
+    stats_cols.insert(1, stats_cols.pop())
+    df_final_stats = df_final_stats[stats_cols]
+    df_final_stats[stats_cols[1:]] = df_final_stats[stats_cols[1:]] * 100
+
+    return df_final_stats
+
+
 def visualize_persona_results(
     data: pd.DataFrame, persona_horizon: str, measures: list[str], **kwargs
 ) -> plt.Figure:

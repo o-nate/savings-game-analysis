@@ -7,6 +7,7 @@ EXP_2_DATABASE = "exp2.duckdb"
 # * Savings Game initial parameters
 INITIAL_ENDOWMENT = 863.81
 INTEREST_RATE = 0.2277300 / 12
+ANNUAL_INTEREST_RATE = ((1 + INTEREST_RATE) ** 12 - 1) * 100
 WAGE = 4.32
 
 # * Define annualized inflation, per 12 months
@@ -56,3 +57,13 @@ QUESTIONS = {
 
 # * Stats analysis
 BONFERRONI_ALPHA = 0.05
+
+# * Decision patterns parameters
+PERSONAS = ["AC", "AI", "IC", "II"]
+DECISION_PATTERN_MEASURES = [
+    "Quant Perception",
+    "Quant Expectation",
+    "Qual Expectation",
+]
+QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_12 = 2
+QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_36 = 1
