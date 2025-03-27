@@ -234,7 +234,6 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
         ],
         how="left",
     )
-    logger.debug(df5.columns.to_list())
     # * Interpolate qualitative responses of no change as 0 for quantitative
     perception_cols = [f"task.{month*12}.player.inf_estimate" for month in range(1, 11)]
     qual_perception_cols = [
@@ -283,7 +282,6 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
             default=df5[quant],
         )
 
-    logger.debug(df5.columns.to_list())
     df_survey = df5.melt(
         id_vars=[
             "participant.code",
@@ -323,11 +321,9 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
         ],
         inplace=True,
     )
-    logger.debug(df_survey.info())
 
     # * Add actual inflation
     if include_inflation:
-        logger.debug("INFLATION_DICT %s", INFLATION_DICT)
         ## Convert to dataframe
         df_inf = pd.DataFrame(INFLATION_DICT)
         ## Merge with survey responses
