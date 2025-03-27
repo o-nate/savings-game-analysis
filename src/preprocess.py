@@ -183,6 +183,11 @@ def split_df_task(df_to_split: pd.DataFrame) -> tuple[list, dict]:
 
 
 def preprocess_data() -> dict[str, pd.DataFrame]:
+    """Process data from Experiment 2
+
+    Returns:
+        dict[str, pd.DataFrame]: Dictionary of dataframes for each task and measure
+    """
     # * Create initial dataframe with all data
     parent_dir = Path(__file__).parents[1]
     data_dir = parent_dir / "data"
@@ -256,11 +261,6 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
         complete["participant.label"].nunique(),
     )
 
-    # TODO Define whether participant was in intervention or control group
-    # TODO Can do so without needing to change oTree table in the future by using
-    # TODO `participant._index_in_pages` for task app with intervention app,
-    # TODO where `intervention` participants have a higher value
-    ## Not working currently since task_int not in day_1 list (part of task_1 app)
     ## Convert tasks for day to list object
     complete["participant.day_1"] = complete["participant.day_1"].apply(eval)
 
@@ -475,7 +475,6 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
     logger.debug("df_wisc shape %s", df_wisc.shape)
 
     # remove separated trial number columns
-    columns = []
     for col in range(1, 31):
         df_wisc.drop(str(col), axis=1, inplace=True)
 
@@ -623,7 +622,8 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
 
 
 def main() -> None:
-    results = preprocess_data()
+    """Run script"""
+    _ = preprocess_data()
 
 
 if __name__ == "__main__":

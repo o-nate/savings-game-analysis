@@ -10,6 +10,7 @@ import duckdb
 from src.calc_opp_costs import calculate_opportunity_costs
 from src.discontinuity import purchase_discontinuity
 from src.intervention import calculate_change_in_measure
+from src.utils.constants import EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
@@ -18,7 +19,7 @@ from tests.utils.constants import CHANGE_IN_PERFORMANCE
 # * Logging settings
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 con = duckdb.connect(DATABASE_FILE, read_only=False)
 if table_exists(con, "Inflation") == False:
     create_duckdb_database(con, initial_creation=True)

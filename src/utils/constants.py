@@ -1,5 +1,9 @@
 """Constants for src modules"""
 
+# * DuckDB info
+EXP_1_DATABASE = "exp1.duckdb"
+EXP_2_DATABASE = "exp2.duckdb"
+
 # * Savings Game initial parameters
 INITIAL_ENDOWMENT = 863.81
 INTEREST_RATE = 0.2277300 / 12

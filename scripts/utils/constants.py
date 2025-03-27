@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
-DATABASE_FILE = Path(__file__).parents[2] / "data" / "database.duckdb"
+from src.utils.constants import EXP_2_DATABASE
+
+DATABASE_FILE = Path(__file__).parents[2] / "data" / EXP_2_DATABASE
 
 QUESTIONNAIRE_MEASURES = [
     "age",

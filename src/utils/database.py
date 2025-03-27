@@ -6,11 +6,12 @@ import duckdb
 import pandas as pd
 
 from src.preprocess import preprocess_data
+from src.utils.constants import EXP_2_DATABASE
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[2] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[2] / "data" / EXP_2_DATABASE
 
 
 def create_duckdb_database(

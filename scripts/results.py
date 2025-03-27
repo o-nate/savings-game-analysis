@@ -42,7 +42,7 @@ pd.options.display.max_rows = None
 ## Decimal rounding
 pd.set_option("display.float_format", lambda x: "%.2f" % x)
 
-# DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+# DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 con = duckdb.connect(constants.DATABASE_FILE, read_only=False)
 
 # ! Export plots

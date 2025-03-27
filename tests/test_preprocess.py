@@ -5,14 +5,16 @@ from pathlib import Path
 import duckdb
 
 from src.preprocess import preprocess_data
+from src.utils.constants import EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
+
 from tests.utils import constants
 from utils.logging_config import get_logger
 
 # * Logging settings
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 con = duckdb.connect(DATABASE_FILE, read_only=False)
 if not table_exists(con, "Inflation"):
     create_duckdb_database(con, initial_creation=True)
@@ -33,7 +35,6 @@ assert df["trial_number_30"].mean() == constants.MEAN_TRIAL_NUMBER
 logger.info("Trial numbers correct")
 
 
-logger.debug("ncorr: %s", final_df_dict["wisconsin"].value_counts("correct_5"))
 assert (
     final_df_dict["wisconsin"].value_counts("correct_5")[True]
     == constants.NCORR_TRIAL_NUMBER_5

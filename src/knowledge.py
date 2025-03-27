@@ -9,12 +9,13 @@ import numpy as np
 import pandas as pd
 
 from src.utils import helpers
+from src.utils.constants import EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 
 
 def count_correct_responses(data: pd.DataFrame, knowledge_measure: str) -> pd.Series:

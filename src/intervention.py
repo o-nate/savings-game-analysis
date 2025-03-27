@@ -14,13 +14,14 @@ import seaborn as sns
 
 from src.calc_opp_costs import calculate_opportunity_costs
 from src.discontinuity import purchase_discontinuity
+from src.utils.constants import EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
 # * Logging settings
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 
 
 # * Define `decision quantity` measure
