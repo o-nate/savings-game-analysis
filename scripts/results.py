@@ -246,7 +246,7 @@ conditions_list = [
     df_inf_measures["Qual Perception"].isna(),
 ]
 df_inf_measures["Qual Perception Accuracy"] = np.select(
-    conditions_list, [1, 1, np.NaN], default=0
+    conditions_list, [1, 1, np.nan], default=0
 )
 
 conditions_list = [
@@ -259,7 +259,7 @@ conditions_list = [
 ]
 
 df_inf_measures["Qual Expectation Accuracy"] = np.select(
-    conditions_list, [1, 1, np.NaN], default=0
+    conditions_list, [1, 1, np.nan], default=0
 )
 
 df_accuracy = pd.pivot_table(

@@ -119,7 +119,7 @@ def determine_qualitative_accuracy(
         & (data[qualitative_estimate_col] <= 1),
         data[qualitative_estimate_col].isna(),
     ]
-    return np.select(conditions_list, [1, 1, np.NaN], default=default)
+    return np.select(conditions_list, [1, 1, np.nan], default=default)
 
 
 def pivot_inflation_measures(data: pd.DataFrame) -> pd.DataFrame:

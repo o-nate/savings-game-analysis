@@ -52,7 +52,7 @@ def purchase_discontinuity(
     final_df[decision_quantity] = np.where(
         final_df["month"] == CHANGE_430 - (window - 1),
         final_df[decision_quantity],
-        np.NaN,
+        np.nan,
     )
 
     ## Forward fill `decision quantity` with value at start of first month in window
