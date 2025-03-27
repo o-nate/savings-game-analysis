@@ -1,0 +1,21 @@
+name: savings-game-analysis
+channels:
+  - conda-forge
+  - defaults
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+  - https://repo.anaconda.com/pkgs/msys2
+dependencies:
+  - python=3.10
+  - duckdb
+  - ipykernel
+  - matplotlib
+  - numpy
+  - pandas
+  - seaborn
+  - statsmodels
+  - tqdm
+  - python-dotenv
+  - openpyxl
+  - pingouin
+prefix: C:\Users\nlawrenc\anaconda3\envs\savings-game-analysis
