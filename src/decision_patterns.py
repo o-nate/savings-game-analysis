@@ -1,11 +1,16 @@
 """Classify subjects by pattern of perceptions/expectations and decisions"""
 
+from pathlib import Path
+
+import duckdb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.formula.api as smf
 from statsmodels.iolib.summary2 import summary_col
+
+from scripts.utils import constants
 
 from src import calc_opp_costs, process_survey
 
@@ -34,6 +39,20 @@ def classify_subject_decision_patterns(
     coherent_decision: int,
     threshold_estimate: int | float,
 ) -> pd.DataFrame:
+    """Classify subjects as Accurate-Coherent, Accurante-Incoherent, Inaccurate-Coherent,
+    or Inaccurate-Incoherent
+
+    Args:
+        data (pd.DataFrame): DataFrame decisions and inflation estimates
+        estimate_measure (str): Inflation estimate to assess accuracy
+        decision_measure (str): Decision measure to assess coherence
+        month (int): Month of decision assessment
+        coherent_decision (int): Threshold for coherent decision
+        threshold_estimate (int | float): Threshold for accurate estimate
+
+    Returns:
+        pd.DataFrame: DataFrame with classification column
+    """
     if estimate_measure == "Quant Perception":
         months = [month]
     else:
@@ -154,7 +173,8 @@ def compare_decision_pattern_changes(
 
 def main() -> None:
     """Run script"""
-    df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
+    con = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
+    df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con, experiment=2)
 
     df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
     df_opp_cost.head()

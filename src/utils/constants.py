@@ -14,6 +14,12 @@ INTEREST_RATE = 0.2277300 / 12
 ANNUAL_INTEREST_RATE = ((1 + INTEREST_RATE) ** 12 - 1) * 100
 WAGE = 4.32
 
+# * For column name conversion
+EXP_1_COLUMNS_HASH = {
+    "participant.intervention": "treatment",
+    "phase": "participant.round",
+}
+
 # * Define annualized inflation, per 12 months
 INF_1012 = [0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79]
 INF_430 = [0.38, 0.47, 26.85, 55.49, 64.18, 0.38, 0.47, 26.85, 55.49, 64.18]

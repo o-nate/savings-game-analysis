@@ -19,8 +19,14 @@ from tqdm.auto import tqdm
 
 from src import preprocess_exp_1
 from src.preprocess import preprocess_data
-from src.utils.constants import EXP_1_DATABASE, INITIAL_ENDOWMENT, INTEREST_RATE, WAGE
+from src.utils.constants import (
+    EXP_1_DATABASE,
+    INITIAL_ENDOWMENT,
+    INTEREST_RATE,
+    WAGE,
+)
 from src.utils.database import create_duckdb_database, table_exists
+from src.utils.exp_1_patches import conform_column_names, conform_participant_rounds
 from utils.logging_config import get_logger
 
 # * Logging settings
@@ -69,10 +75,6 @@ OPP_COSTS_MELT_COLS = [
     "participant.inflation",
     "participant.round",
 ]
-EXP_1_COLUMNS_HASH = {
-    "participant.intervention": "treatment",
-    "phase": "participant.round",
-}
 # PARTICIPANT_ROUND_HASH = {"pre": 1, "post": 2}
 PLOT_MELT_COLS = [
     "participant.code",
@@ -82,16 +84,6 @@ PLOT_MELT_COLS = [
     "month",
     "participant.inflation",
 ]
-
-
-def conform_column_names(data: pd.DataFrame) -> pd.DataFrame:
-    """For conforming column names from Experiment 1 to those of Experiment 2"""
-    return data.rename(columns=EXP_1_COLUMNS_HASH)
-
-
-def conform_participant_rounds(data: pd.DataFrame) -> pd.DataFrame:
-    """For conforming rounds from Experiment 1 to those of Experiment 2"""
-    return np.where(data["participant.day"].lt(3), 1, 2)
 
 
 def categorize_opp_cost(data: pd.DataFrame) -> pd.DataFrame:

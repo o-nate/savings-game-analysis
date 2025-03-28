@@ -74,3 +74,38 @@ df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con, experiment=1)
 calc_opp_costs.plot_savings_and_stock(
     df_opp_cost, col="phase", row="participant.inflation", palette="tab10"
 )
+
+
+# %% [markdown]
+### Performance measures: Over- and wasteful-stocking and purchase adaptation
+# TODO update discontinuity function to include 10x12
+#  df_measures = discontinuity.purchase_discontinuity(
+#     df_opp_cost, constants.DECISION_QUANTITY, constants.WINDOW
+# )
+
+# ## Set avg_q and avg_q_% as month=33 value
+# df_pivot_measures = pd.pivot_table(
+#     df_measures[df_measures["month"] == 33][["participant.code", "avg_q", "avg_q_%"]],
+#     index="participant.code",
+# )
+# df_pivot_measures.reset_index(inplace=True)
+# df_measures = df_measures[[m for m in df_measures.columns if "avg_q" not in m]].merge(
+#     df_pivot_measures, how="left"
+# )
+
+# ## Rename columns for results table
+# df_measures.rename(
+#     columns={
+#         k: v
+#         for k, v in zip(
+#             constants.PERFORMANCE_MEASURES_OLD_NAMES
+#             + constants.PURCHASE_ADAPTATION_OLD_NAME,
+#             constants.PERFORMANCE_MEASURES_NEW_NAMES
+#             + constants.PURCHASE_ADAPTATION_NEW_NAME,
+#         )
+#     },
+#     inplace=True,
+# )
+# df_measures[(df_measures["month"] == 120) & (df_measures["phase"] == "pre")].describe()[
+#     constants.PERFORMANCE_MEASURES_NEW_NAMES + constants.PURCHASE_ADAPTATION_NEW_NAME
+# ].T[["mean", "std", "min", "50%", "max"]]
