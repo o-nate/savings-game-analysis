@@ -115,6 +115,10 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
         complete["participant.time_started_utc"]
     )
 
+    # * Create date column for easier filtering
+    complete["date"] = complete["participant.time_started_utc"].dt.normalize()
+    logger.debug("Added date column: %s", "date" in complete.columns)
+
     # add column with intervention
     complete["participant.intervention"] = ""
     complete["participant.day_3"] = complete["participant.day_3"].apply(eval)
@@ -131,7 +135,6 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
         | (complete["participant.time_started_utc"] > TO_TS)
         # | (complete['participant.time_started_utc'] > after_ts)
     ]
-    # complete = complete[~(complete['participant.time_started_utc'] == '2023-02-13')]
 
     # organize rows by participant.label
     # and display corresponding codes
@@ -158,11 +161,11 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
             df_list.append(app)
             if app == "task" or app == "task_questions":
                 df_dict[app] = df.filter(
-                    regex=f"participant.code|participant.label|participant.time_started_utc|participant.day|participant.inflation|participant.intervention|{app}."
+                    regex=f"participant.code|participant.label|date|participant.day|participant.inflation|participant.intervention|{app}."
                 )
             else:
                 df_dict[app] = df.filter(
-                    regex=f"participant.code|participant.label|participant.time_started_utc|participant.day|participant.intervention|{app}."
+                    regex=f"participant.code|participant.label|date|participant.day|participant.intervention|{app}."
                 )
         return df_list
 
@@ -404,7 +407,7 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
         for field in FIELDS:
             task_df_list.append(field)
             task_df_dict[field] = df.filter(
-                regex=f"participant.code|participant.label|utc|participant.day|participant.inflation|participant.intervention|{field}$"
+                regex=f"participant.code|participant.label|date|participant.day|participant.inflation|participant.intervention|{field}$"
             )
         return task_df_list
 

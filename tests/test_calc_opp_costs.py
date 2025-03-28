@@ -17,11 +17,10 @@ logger.debug("Check db")
 con = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 
 if table_exists(con, TABLE_NAME):
-    logger.debug("Table exists!!!****************************")
     df_opp_cost = con.sql(f"SELECT * FROM {TABLE_NAME}").df()
 else:
     logger.debug("Table does not exist")
-    df_opp_cost = calculate_opportunity_costs(con)
+    df_opp_cost = calculate_opportunity_costs(con, experiment=2)
     create_duckdb_database(con, {TABLE_NAME: df_opp_cost})
     logger.info("%s table added to database", TABLE_NAME)
 

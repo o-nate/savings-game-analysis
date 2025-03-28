@@ -38,6 +38,7 @@ from utils.logging_config import get_logger
 # * Logging settings
 logger = get_logger(__name__)
 
+
 # * Pandas settings
 pd.options.display.max_columns = None
 pd.options.display.max_rows = None
@@ -69,7 +70,7 @@ df_questionnaire[
 # %% [markdown]
 ## Behavior in the Savings Game
 ### Overall performance
-df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
+df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con, experiment=2)
 calc_opp_costs.plot_savings_and_stock(df_opp_cost, col="phase", palette="tab10")
 
 
