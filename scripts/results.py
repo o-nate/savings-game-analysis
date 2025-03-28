@@ -365,3 +365,56 @@ for i, treatment in zip(range(3), ["Intervention 2", "Intervention 1", "Control"
     axs[2][i].set_title(treatment)
 
 plt.show()
+
+# %%
+cols = [
+    "participant.code",
+    "Month",
+    "Quant Perception_pattern_12",
+    "sreal_%",
+    "early_%",
+    "excess_%",
+]
+new_cols = {
+    "Month": "Proportion (%)",
+    "sreal_%": "Total performance (%)",
+    "early_%": "Over-stocking (%)",
+    "excess_%": "Wasteful-stocking (%)",
+}
+df_decisions_all = pd.concat(
+    [
+        df_decisions_1[df_decisions_1["participant.round"] == 1][cols],
+        df_decisions_2[df_decisions_2["participant.round"] == 1][cols],
+    ]
+)
+
+summary = (
+    df_decisions_all[df_decisions_all["Month"] == 120]
+    .groupby("Quant Perception_pattern_12")
+    .describe()[
+        [
+            ("Month", "count"),
+            ("sreal_%", "mean"),
+            ("early_%", "mean"),
+            ("excess_%", "mean"),
+        ]
+    ]
+    .reset_index()
+)
+# For overall performance, bottom row
+summary_all = df_decisions_all[df_decisions_all["Month"] == 120].describe()
+summary_all = summary_all[summary_all.index == "mean"]
+summary_all = summary_all.rename(columns=new_cols)
+
+summary.columns = summary.columns.get_level_values(0)
+summary["Month"] = summary["Month"] / summary["Month"].sum()
+summary = summary.rename(columns=new_cols)
+summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
+summary.loc[len(summary)] = [
+    "Overall",
+    100,
+    summary_all["Total performance (%)"].iat[0] * 100,
+    summary_all["Over-stocking (%)"].iat[0] * 100,
+    summary_all["Wasteful-stocking (%)"].iat[0] * 100,
+]
+summary
