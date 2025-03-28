@@ -14,14 +14,14 @@ TABLE_NAME = "strategies"
 TEST_PARTICIPANT_CODE = "17c9d4zc"
 
 logger.debug("Check db")
-con = duckdb.connect(constants.DATABASE_FILE, read_only=False)
+con = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 
 if table_exists(con, TABLE_NAME):
     logger.debug("Table exists!!!****************************")
     df_opp_cost = con.sql(f"SELECT * FROM {TABLE_NAME}").df()
 else:
     logger.debug("Table does not exist")
-    df_opp_cost = calculate_opportunity_costs()
+    df_opp_cost = calculate_opportunity_costs(con)
     create_duckdb_database(con, {TABLE_NAME: df_opp_cost})
     logger.info("%s table added to database", TABLE_NAME)
 

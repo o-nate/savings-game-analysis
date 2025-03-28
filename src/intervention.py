@@ -263,7 +263,7 @@ def main() -> None:
         create_duckdb_database(con, initial_creation=True)
     df_int = con.sql("SELECT * FROM task_int").df()
 
-    df_results = calculate_opportunity_costs()
+    df_results = calculate_opportunity_costs(con)
     logging.debug(df_results.shape)
 
     df_results = purchase_discontinuity(

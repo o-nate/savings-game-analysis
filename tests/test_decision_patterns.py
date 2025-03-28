@@ -1,5 +1,8 @@
 """Classify subjects by pattern of perceptions/expectations and decisions"""
 
+from pathlib import Path
+
+import duckdb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -14,7 +17,7 @@ from src.decision_patterns import (
     define_decision_patterns,
 )
 
-from src.utils.constants import ANNUAL_INTEREST_RATE, PERSONAS
+from src.utils.constants import ANNUAL_INTEREST_RATE, EXP_2_DATABASE
 from src.utils.plotting import (
     annotate_2d_histogram,
     create_performance_measures_table,
@@ -28,8 +31,11 @@ from utils.logging_config import get_logger
 # * Set logger
 logger = get_logger(__name__)
 
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 
-df_opp_cost = calc_opp_costs.calculate_opportunity_costs()
+con = duckdb.connect(DATABASE_FILE, read_only=False)
+
+df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
 
 df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
 df_opp_cost.head()

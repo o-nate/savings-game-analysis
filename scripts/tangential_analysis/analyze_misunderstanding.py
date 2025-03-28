@@ -49,7 +49,7 @@ DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 con = duckdb.connect(DATABASE_FILE, read_only=False)
 
 # %%
-df_opp_cost = calc_opp_costs.calculate_opportunity_costs()
+df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
 
 # %%
 if table_exists(con, "task_instructions") == False:

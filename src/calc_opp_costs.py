@@ -220,36 +220,37 @@ def plot_savings_and_stock(data: pd.DataFrame, **kwargs) -> None:
     plt.show()
 
 
-def calculate_opportunity_costs() -> pd.DataFrame:
+def calculate_opportunity_costs(
+    db_connection: duckdb.DuckDBPyConnection,
+) -> pd.DataFrame:
     """Produce dataframe with opportunity costs for each subject each month
 
     Returns:
         pd.DataFrame: Opportunity costs per subject per month
     """
     logger.info("Checking if data already in database")
-    con = duckdb.connect(DATABASE_FILE, read_only=False)
     if (
-        table_exists(con, "decision")
-        and table_exists(con, "finalStock")
-        and table_exists(con, "newPrice")
-        and table_exists(con, "finalSavings")
+        table_exists(db_connection, "decision")
+        and table_exists(db_connection, "finalStock")
+        and table_exists(db_connection, "newPrice")
+        and table_exists(db_connection, "finalSavings")
     ):
         logger.debug("Tables all exists!!!!!!!!!!!!!")
-        df_decision = con.sql("SELECT * FROM decision").df()
-        df_stock = con.sql("SELECT * FROM finalStock").df()
-        df_prices = con.sql("SELECT * FROM newPrice").df()
-        df_save = con.sql("SELECT * FROM finalSavings").df()
+        df_decision = db_connection.sql("SELECT * FROM decision").df()
+        df_stock = db_connection.sql("SELECT * FROM finalStock").df()
+        df_prices = db_connection.sql("SELECT * FROM newPrice").df()
+        df_save = db_connection.sql("SELECT * FROM finalSavings").df()
     else:
         final_df_dict = preprocess_data()
-        create_duckdb_database(con, data_dict=final_df_dict)
+        create_duckdb_database(db_connection, data_dict=final_df_dict)
         df_decision = final_df_dict["decision"].copy()
         df_stock = final_df_dict["finalStock"].copy()
         df_prices = final_df_dict["newPrice"].copy()
         df_save = final_df_dict["finalSavings"].copy()
 
-    if table_exists(con, TABLE_NAME):
+    if table_exists(db_connection, TABLE_NAME):
         logger.debug("Table exists!!!****************************")
-        return con.sql(f"SELECT * FROM {TABLE_NAME}").df()
+        return db_connection.sql(f"SELECT * FROM {TABLE_NAME}").df()
 
     df_inf = pd.read_csv(INF_FILE, delimiter=",", header=0)
     df_inf.rename(columns={"period": "month"}, inplace=True)
@@ -497,7 +498,7 @@ def calculate_opportunity_costs() -> pd.DataFrame:
     logger.info("Done, df_opp_cost columns: %s", df_opp_cost.columns.to_list())
 
     logger.info("Creating table in duckdb database")
-    create_duckdb_database(con, data_dict={TABLE_NAME: df_opp_cost})
+    create_duckdb_database(db_connection, data_dict={TABLE_NAME: df_opp_cost})
     logger.info("%s table added to database", TABLE_NAME)
 
     return df_opp_cost
@@ -505,7 +506,10 @@ def calculate_opportunity_costs() -> pd.DataFrame:
 
 def main() -> None:
     """Export results to csv file & graph stuffs"""
-    df = calculate_opportunity_costs()
+
+    con = duckdb.connect(DATABASE_FILE, read_only=False)
+
+    df = calculate_opportunity_costs(con)
     export_data = input("Export data? (y/n):")
     if export_data not in ("y", "n"):
         export_data = input("Please respond with 'y' or 'n':")

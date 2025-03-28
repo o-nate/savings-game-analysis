@@ -69,7 +69,7 @@ df_questionnaire[
 # %% [markdown]
 ## Behavior in the Savings Game
 ### Overall performance
-df_opp_cost = calc_opp_costs.calculate_opportunity_costs()
+df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
 calc_opp_costs.plot_savings_and_stock(df_opp_cost, col="phase", palette="tab10")
 
 

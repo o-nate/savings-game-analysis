@@ -65,7 +65,7 @@ inf_behavior_cols = [
     "inflation_score",
 ]
 # %%
-df2 = calc_opp_costs.calculate_opportunity_costs()
+df2 = calc_opp_costs.calculate_opportunity_costs(con)
 df2 = df2.merge(df[["participant.label"] + inf_behavior_cols], how="left")
 
 for c in inf_behavior_cols:

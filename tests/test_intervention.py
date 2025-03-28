@@ -35,7 +35,7 @@ logger.info("Testing intervention module")
 
 df_int = con.sql("SELECT * FROM task_int").df()
 
-df_results = calculate_opportunity_costs()
+df_results = calculate_opportunity_costs(con)
 
 df_results = purchase_discontinuity(
     df_results, decision_quantity=DECISION_QUANTITY, window=WINDOW
