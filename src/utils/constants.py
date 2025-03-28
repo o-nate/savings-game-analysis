@@ -1,5 +1,9 @@
 """Constants for src modules"""
 
+# * Exp data info
+EXP_1_FILE = "all_apps_wide_2023-02-27.csv"
+EXP_2_FILE = "all_apps_wide_2024-07-08.csv"
+
 # * DuckDB info
 EXP_1_DATABASE = "exp1.duckdb"
 EXP_2_DATABASE = "exp2.duckdb"

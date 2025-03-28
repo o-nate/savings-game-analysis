@@ -9,19 +9,22 @@ import re
 import time
 import warnings
 
+from pathlib import Path
+
 import pandas as pd
-from openpyxl import load_workbook
 
 from dotenv import load_dotenv
+from openpyxl import load_workbook
 from tqdm import tqdm
 
+from src.utils.constants import EXP_1_FILE
 from utils.logging_config import get_logger
 
 # * Logging settings
 logger = get_logger(__name__)
 
 # # Declare file name
-FILE = "all_apps_wide_2023-02-27.csv"
+FILE = EXP_1_FILE
 
 # Declare name of output file
 FILE_PREFIX = "processed_"
@@ -91,10 +94,12 @@ def preprocess_data() -> dict[str, pd.DataFrame]:
     """
 
     # make dataframe
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    complete = pd.read_csv(f"{FILE}")
-    print(f"Initial dataframe size: {complete.shape}")
-    print("Removing participants who did not finish or had internet connection issues.")
+    # * Create initial dataframe with all data
+    parent_dir = Path(__file__).parents[1]
+    data_dir = parent_dir / "data"
+    logger.info("Data from directory %s", data_dir)
+    complete = pd.read_csv(f"{data_dir}/{FILE}")
+    logger.info("Initial dataframe size: %s", complete.shape)
 
     # remove rows participant.label = NaN
     complete = complete[complete["participant.label"].notna()]

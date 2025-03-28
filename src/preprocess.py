@@ -12,13 +12,14 @@ import pandas as pd
 from openpyxl import load_workbook
 from tqdm import tqdm
 
+from src.utils.constants import EXP_2_FILE
+
 from utils.logging_config import get_logger
 
 # * Logging settings
 logger = get_logger(__name__)
 
-# * Declare name of file to process
-FILE = "all_apps_wide_2024-07-08.csv"
+FILE = EXP_2_FILE
 
 # * Declare name of output file
 FINAL_FILE_PREFIX = "processed_"

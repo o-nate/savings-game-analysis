@@ -5,6 +5,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
+from src import preprocess_exp_1
 from src.preprocess import preprocess_data
 from src.utils.constants import EXP_2_DATABASE
 from utils.logging_config import get_logger
@@ -16,17 +17,17 @@ DATABASE_FILE = Path(__file__).parents[2] / "data" / EXP_2_DATABASE
 
 def create_duckdb_database(
     db_connection: duckdb.DuckDBPyConnection,
+    experiment: int,
     initial_creation: bool = False,
     data_dict: dict[str, pd.DataFrame] = None,
 ) -> None:
-    # con = duckdb.connect(database=DATABASE_FILE, read_only=False)
 
-    if initial_creation:
-        logger.debug("initial creation??????????????????????")
+    if initial_creation and experiment == 1:
+        data_dict = preprocess_exp_1.preprocess_data()
+    if initial_creation and experiment == 2:
         data_dict = preprocess_data()
 
     for name, df in data_dict.items():
-        logger.debug("creating table %s", name)
         data_for_table = df.copy()
         create_table_query = f"""
         CREATE TABLE IF NOT EXISTS {name} AS SELECT * FROM data_for_table;

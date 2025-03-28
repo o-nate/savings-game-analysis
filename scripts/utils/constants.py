@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
-from src.utils.constants import EXP_2_DATABASE
+from src.utils.constants import EXP_1_DATABASE, EXP_2_DATABASE
 
-DATABASE_FILE = Path(__file__).parents[2] / "data" / EXP_2_DATABASE
+EXP_1_DATABASE_FILE = Path(__file__).parents[2] / "data" / EXP_1_DATABASE
+EXP_2_DATABASE_FILE = Path(__file__).parents[2] / "data" / EXP_2_DATABASE
 
 QUESTIONNAIRE_MEASURES = [
     "age",
