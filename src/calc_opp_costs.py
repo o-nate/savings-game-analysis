@@ -17,16 +17,23 @@ import pandas as pd
 import seaborn as sns
 from tqdm.auto import tqdm
 
+from src import preprocess_exp_1
 from src.preprocess import preprocess_data
-from src.utils.constants import INITIAL_ENDOWMENT, INTEREST_RATE, WAGE
+from src.utils.constants import (
+    EXP_1_DATABASE,
+    INITIAL_ENDOWMENT,
+    INTEREST_RATE,
+    WAGE,
+)
 from src.utils.database import create_duckdb_database, table_exists
+from src.utils.exp_1_patches import conform_column_names, conform_participant_rounds
 from utils.logging_config import get_logger
 
 # * Logging settings
 logger = get_logger(__name__)
 
 # * Declare duckdb database info
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
 TABLE_NAME = "strategies"
 
 
@@ -60,7 +67,7 @@ logger.info(
 )
 
 ## Columns to pull from original dataframes
-MELT_COLS = [
+OPP_COSTS_MELT_COLS = [
     "participant.code",
     "participant.label",
     "date",
@@ -68,50 +75,59 @@ MELT_COLS = [
     "participant.inflation",
     "participant.round",
 ]
+# PARTICIPANT_ROUND_HASH = {"pre": 1, "post": 2}
+PLOT_MELT_COLS = [
+    "participant.code",
+    "participant.label",
+    "treatment",
+    "phase",
+    "month",
+    "participant.inflation",
+]
 
 
-def categorize_opp_cost(df: pd.DataFrame) -> pd.DataFrame:
+def categorize_opp_cost(data: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate opportunity costs for each possible mistake
     (early, late and excesss purchases)
     """
-    df["excess"] = df["s1"] - df["sreal"]
-    df["early"] = df["s2"] - df["s1"]
-    df["late"] = df["soptimal"] - df["s2"]
+    data["excess"] = data["s1"] - data["sreal"]
+    data["early"] = data["s2"] - data["s1"]
+    data["late"] = data["soptimal"] - data["s2"]
 
-    return df
+    return data
 
 
-def savings_calc(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
+def savings_calc(data: pd.DataFrame, strategy: str) -> pd.DataFrame:
     """Function to calculate savings after month t=1
     After 1st month, Si_t = Si_(t-1) * (1 + r) + y - p_t * qi_t"""
     q_col = f"q{strategy}" if strategy != "real" else "decision"
-    for i in tqdm(range(len(df)), desc=f"S{strategy}"):
-        if df.month.iat[i] > 1:
+    for i in tqdm(range(len(data)), desc=f"S{strategy}"):
+        if data.month.iat[i] > 1:
             ## Must round Si_(t-1) and p_t to nearest 0.01 because of rounding in oTree
             si_t = (
-                round_price(df[f"s{strategy}"].iat[i - 1]) * (1 + INTEREST)
+                round_price(data[f"s{strategy}"].iat[i - 1]) * (1 + INTEREST)
                 + WAGE
-                - df.newPrice.iat[i] * df[q_col].iat[i]
+                - data.newPrice.iat[i] * data[q_col].iat[i]
             )
             ## Must subsequently round si_t to nearest 0.01 too
-            df[f"s{strategy}"].iat[i] = round_price(si_t)
+            data[f"s{strategy}"].iat[i] = round_price(si_t)
         else:
             pass
-    return df[f"s{strategy}"]
+    return data[f"s{strategy}"]
 
 
-def strategy_savings_calc(strategy_list: list[str], df: pd.DataFrame) -> pd.DataFrame:
+def strategy_savings_calc(strategy_list: list[str], data: pd.DataFrame) -> pd.DataFrame:
     """Apply savings_calc for each strategy"""
     for strat in strategy_list:
         q_col = f"q{strat}" if strat != "real" else "decision"
-        df[f"s{strat}"] = np.nan
+        data[f"s{strat}"] = np.nan
         ## For 1st month, Si_1 = Si_(t-1) * (1+r) + y - p_1*qi_1
-        df[f"s{strat}"][df["month"] == 1] = (
-            INITIAL_ENDOWMENT + WAGE - df["newPrice"] * df[q_col]
+        data[f"s{strat}"][data["month"] == 1] = (
+            INITIAL_ENDOWMENT + WAGE - data["newPrice"] * data[q_col]
         )
-        df[f"s{strat}"] = savings_calc(df, strat)
-    return df
+        data[f"s{strat}"] = savings_calc(data, strat)
+    return data
 
 
 def truncate_decimals(target_allocation, two_decimal_places) -> float:
@@ -139,28 +155,14 @@ def plot_savings_and_stock(data: pd.DataFrame, **kwargs) -> None:
     """
     ## Convert to time series-esque dataframe for multi-bar plot
     df_stock = data.melt(
-        id_vars=[
-            "participant.code",
-            "participant.label",
-            "treatment",
-            "participant.inflation",
-            "phase",
-            "month",
-        ],
+        id_vars=PLOT_MELT_COLS,
         var_name="Strategy",
         value_vars=["participant.inflation", "finalStock", "sgoptimal", "sgnaive"],
         value_name="Stock",
     )
 
     df_savings = data.melt(
-        id_vars=[
-            "participant.code",
-            "participant.label",
-            "treatment",
-            "participant.inflation",
-            "phase",
-            "month",
-        ],
+        id_vars=PLOT_MELT_COLS,
         var_name="Strategy",
         value_vars=["participant.inflation", "sreal", "soptimal", "snaive"],
         value_name="Savings",
@@ -174,10 +176,8 @@ def plot_savings_and_stock(data: pd.DataFrame, **kwargs) -> None:
     dfts = dfts.loc[:, ~dfts.columns.duplicated()].copy()
 
     ## Rename strategies
-    dfts.Strategy.replace(
-        ["finalStock", "sgnaive", "sgoptimal"],
-        ["Average", "Naïve", "Best"],
-        inplace=True,
+    dfts["Strategy"] = dfts["Strategy"].replace(
+        ["finalStock", "sgnaive", "sgoptimal"], ["Average", "Naïve", "Best"]
     )
 
     fig = sns.catplot(
@@ -196,9 +196,14 @@ def plot_savings_and_stock(data: pd.DataFrame, **kwargs) -> None:
     logger.debug("items %s", fig.axes_dict.items())
     for phase, ax in fig.axes_dict.items():
         logger.debug(phase)
-        if type(phase) == tuple:
+        if type(phase) == tuple and type(phase[0]) == str:
             data_line_plot = dfts[
                 (dfts["phase"] == phase[1]) & (dfts["treatment"] == phase[0])
+            ]
+        elif type(phase) == tuple and type(phase[0]) != str:
+            data_line_plot = dfts[
+                (dfts["phase"] == phase[1])
+                & (dfts["participant.inflation"] == phase[0])
             ]
         else:
             data_line_plot = dfts[dfts["phase"] == phase]
@@ -220,36 +225,38 @@ def plot_savings_and_stock(data: pd.DataFrame, **kwargs) -> None:
     plt.show()
 
 
-def calculate_opportunity_costs() -> pd.DataFrame:
+def calculate_opportunity_costs(
+    db_connection: duckdb.DuckDBPyConnection, experiment: int
+) -> pd.DataFrame:
     """Produce dataframe with opportunity costs for each subject each month
 
     Returns:
         pd.DataFrame: Opportunity costs per subject per month
     """
     logger.info("Checking if data already in database")
-    con = duckdb.connect(DATABASE_FILE, read_only=False)
-    if (
-        table_exists(con, "decision")
-        and table_exists(con, "finalStock")
-        and table_exists(con, "newPrice")
-        and table_exists(con, "finalSavings")
-    ):
-        logger.debug("Tables all exists!!!!!!!!!!!!!")
-        df_decision = con.sql("SELECT * FROM decision").df()
-        df_stock = con.sql("SELECT * FROM finalStock").df()
-        df_prices = con.sql("SELECT * FROM newPrice").df()
-        df_save = con.sql("SELECT * FROM finalSavings").df()
-    else:
+    if not table_exists(db_connection, "decision") and experiment == 2:
+        logger.debug("creating database for exp %s", experiment)
         final_df_dict = preprocess_data()
-        create_duckdb_database(con, data_dict=final_df_dict)
-        df_decision = final_df_dict["decision"].copy()
-        df_stock = final_df_dict["finalStock"].copy()
-        df_prices = final_df_dict["newPrice"].copy()
-        df_save = final_df_dict["finalSavings"].copy()
+        create_duckdb_database(
+            db_connection, experiment=experiment, data_dict=final_df_dict
+        )
+        df_decision = db_connection.sql("SELECT * FROM decision").df()
+        df_stock = db_connection.sql("SELECT * FROM finalStock").df()
+        df_prices = db_connection.sql("SELECT * FROM newPrice").df()
+        df_save = db_connection.sql("SELECT * FROM finalSavings").df()
+    if not table_exists(db_connection, "decision") and experiment == 1:
+        logger.debug("creating database for exp %s", experiment)
+        final_df_dict = preprocess_exp_1.preprocess_data()
+        create_duckdb_database(
+            db_connection, experiment=experiment, data_dict=final_df_dict
+        )
+    df_decision = db_connection.sql("SELECT * FROM decision").df()
+    df_stock = db_connection.sql("SELECT * FROM finalStock").df()
+    df_prices = db_connection.sql("SELECT * FROM newPrice").df()
+    df_save = db_connection.sql("SELECT * FROM finalSavings").df()
 
-    if table_exists(con, TABLE_NAME):
-        logger.debug("Table exists!!!****************************")
-        return con.sql(f"SELECT * FROM {TABLE_NAME}").df()
+    if table_exists(db_connection, TABLE_NAME):
+        return db_connection.sql(f"SELECT * FROM {TABLE_NAME}").df()
 
     df_inf = pd.read_csv(INF_FILE, delimiter=",", header=0)
     df_inf.rename(columns={"period": "month"}, inplace=True)
@@ -257,10 +264,25 @@ def calculate_opportunity_costs() -> pd.DataFrame:
     # Import optimal purchase
     opt = pd.read_csv(OPTIMAL_DECISIONS_FILE, delimiter=";")
 
+    if "treatment" not in df_decision.columns:
+        logger.debug("conforming columns")
+        df_decision = conform_column_names(df_decision)
+        logger.debug("added: %s", "participant.round" in df_decision.columns)
+        df_stock = conform_column_names(df_stock)
+        df_prices = conform_column_names(df_prices)
+        df_save = conform_column_names(df_save)
+
+    if "participant.round" not in df_decision.columns:
+        logger.debug("conforming rounds")
+        df_decision["participant.round"] = conform_participant_rounds(df_decision)
+        df_stock["participant.round"] = conform_participant_rounds(df_stock)
+        df_prices["participant.round"] = conform_participant_rounds(df_prices)
+        df_save["participant.round"] = conform_participant_rounds(df_save)
+
     # # Create time series for purchase decisions and stock
     ## Decision quantity
     df2 = df_decision.melt(
-        id_vars=MELT_COLS,
+        id_vars=OPP_COSTS_MELT_COLS,
         value_vars=[c for c in df_decision.columns if "decision" in c],
         var_name="month",
         value_name="decision",
@@ -268,7 +290,7 @@ def calculate_opportunity_costs() -> pd.DataFrame:
 
     ## For stock
     df3 = df_stock.melt(
-        id_vars=MELT_COLS,
+        id_vars=OPP_COSTS_MELT_COLS,
         value_vars=[c for c in df_stock.columns if "finalStock" in c],
         var_name="month",
         value_name="finalStock",
@@ -276,7 +298,7 @@ def calculate_opportunity_costs() -> pd.DataFrame:
 
     ## Add price column
     df_prices2 = df_prices.melt(
-        id_vars=MELT_COLS,
+        id_vars=OPP_COSTS_MELT_COLS,
         value_vars=[c for c in df_prices.columns if "newPrice" in c],
         var_name="month",
         value_name="newPrice",
@@ -497,18 +519,24 @@ def calculate_opportunity_costs() -> pd.DataFrame:
     logger.info("Done, df_opp_cost columns: %s", df_opp_cost.columns.to_list())
 
     logger.info("Creating table in duckdb database")
-    create_duckdb_database(con, data_dict={TABLE_NAME: df_opp_cost})
-    logger.info("%s table added to database", TABLE_NAME)
+    create_duckdb_database(
+        db_connection, data_dict={TABLE_NAME: df_opp_cost}, experiment=1
+    )
+    logger.info("%s table added to database for experiment %s", TABLE_NAME, experiment)
 
     return df_opp_cost
 
 
 def main() -> None:
     """Export results to csv file & graph stuffs"""
-    df = calculate_opportunity_costs()
-    export_data = input("Export data? (y/n):")
+
+    con = duckdb.connect(DATABASE_FILE, read_only=False)
+
+    df = calculate_opportunity_costs(con, experiment=1)
+    logger.debug("df columns: %s", df.columns.to_list())
+    export_data = input("Export data? (y/n): ")
     if export_data not in ("y", "n"):
-        export_data = input("Please respond with 'y' or 'n':")
+        export_data = input("Please respond with 'y' or 'n': ")
     if export_data == "y":
         timestr = time.strftime("%Y%m%d-%H%M%S")
         logger.info(timestr)
@@ -516,35 +544,30 @@ def main() -> None:
         df.to_csv(file_path, sep=";")
         logger.info("Created %s", file_path)
 
-    graph_data = input("Plot data? (y/n):")
+    graph_data = input("Plot data? (y/n): ")
+    experiment_to_graph = int(input("Experiment? (1, 2): "))
     if graph_data != "y" and graph_data != "n":
-        graph_data = input("Please respond with 'y' or 'n':")
+        graph_data = input("Please respond with 'y' or 'n': ")
     if graph_data == "y":
-        plot_savings_and_stock(df, col="phase", palette="tab10")
+        if experiment_to_graph == 1:
+            logger.debug("exp 1 plot")
+            plot_savings_and_stock(
+                df, col="phase", row="participant.inflation", palette="tab10"
+            )
+        else:
+            plot_savings_and_stock(df, col="phase", palette="tab10")
 
     # * Individual plots
     ## Convert to time series-esque dataframe for multi-bar plot
     df_stock = df.melt(
-        id_vars=[
-            "participant.code",
-            "participant.label",
-            "participant.round",
-            "phase",
-            "month",
-        ],
+        id_vars=["participant.round"] + PLOT_MELT_COLS,
         var_name="Strategy",
         value_vars=["finalStock", "sgoptimal", "sgnaive"],
         value_name="Stock",
     )
 
     df_savings = df.melt(
-        id_vars=[
-            "participant.code",
-            "participant.label",
-            "participant.round",
-            "phase",
-            "month",
-        ],
+        id_vars=["participant.round"] + PLOT_MELT_COLS,
         var_name="Strategy",
         value_vars=["sreal", "soptimal", "snaive"],
         value_name="Savings",
@@ -563,51 +586,109 @@ def main() -> None:
         ["Average", "Naïve", "Best"],
         inplace=True,
     )
-    export_figs = input("Export figure? (y)")
-    for n in range(2):
-        fig, axes = plt.subplots(1, 1, figsize=(10, 7))
-        sns.barplot(
-            ax=axes,
-            data=dfts[dfts["participant.round"] == n + 1],
-            x="month",
-            y="Stock",
-            palette="tab10",
-            hue="Strategy",
-            errorbar=None,
-        )
-        axes.set_xlabel("Month", labelpad=20, fontsize=14)
-        axes.set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
-        axes.legend(loc="upper center", fontsize=14)
-        axes.set_title(f"Savings Game round {n+1}", fontsize=14)
+    export_figs = input("Export figure? (y) ")
+    if experiment_to_graph == 1:
+        for n in range(2):
+            for inflation in [430, 1012]:
+                fig, axes = plt.subplots(1, 1, figsize=(10, 7))
+                sns.barplot(
+                    ax=axes,
+                    data=dfts[
+                        (dfts["participant.round"] == n + 1)
+                        & (dfts["participant.inflation"] == inflation)
+                    ],
+                    x="month",
+                    y="Stock",
+                    palette="tab10",
+                    hue="Strategy",
+                    errorbar=None,
+                )
+                axes.set_xlabel("Month", labelpad=20, fontsize=14)
+                axes.set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
+                axes.legend(loc="upper center", fontsize=14)
+                inf_title = "4x30" if inflation == 430 else "10x12"
+                axes.set_title(
+                    f"Savings Game round {n+1}, inflation sequence {inf_title}",
+                    fontsize=14,
+                )
 
-        ax = axes.twinx()
-        sns.lineplot(
-            ax=ax,
-            data=dfts[dfts["participant.round"] == n + 1],
-            legend=None,
-            x="month",
-            y="Savings",
-            palette="tab10",
-            hue="Strategy",
-            ci=None,
-        )
-        ax.set(xlabel=None)
-        ax.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
+                ax = axes.twinx()
+                sns.lineplot(
+                    ax=ax,
+                    data=dfts[
+                        (dfts["participant.round"] == n + 1)
+                        & (dfts["participant.inflation"] == inflation)
+                    ],
+                    legend=None,
+                    x="month",
+                    y="Savings",
+                    palette="tab10",
+                    hue="Strategy",
+                    ci=None,
+                )
+                ax.set(xlabel=None)
+                ax.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
 
-        # * Reduce number of tick labels
-        ax.set_xticks(ax.get_xticks()[0:120:12])
-        ax.set_ylim(0, dfts["Savings"].max() + 500)
+                # * Reduce number of tick labels
+                ax.set_xticks(ax.get_xticks()[0:120:12])
+                ax.set_ylim(0, dfts["Savings"].max() + 500)
 
-        if export_figs == "y":
-            fig_name = n + 1
-            file_path = (
-                Path(__file__).parents[1]
-                / "results"
-                / f"overall_performance_{fig_name}.png"
+                if export_figs == "y":
+                    fig_name = n + 1
+                    file_path = (
+                        Path(__file__).parents[1]
+                        / "results"
+                        / f"overall_performance_{fig_name}.png"
+                    )
+                    plt.savefig(file_path, bbox_inches="tight")
+
+                plt.show()
+
+    else:
+        for n in range(2):
+            fig, axes = plt.subplots(1, 1, figsize=(10, 7))
+            sns.barplot(
+                ax=axes,
+                data=dfts[dfts["participant.round"] == n + 1],
+                x="month",
+                y="Stock",
+                palette="tab10",
+                hue="Strategy",
+                errorbar=None,
             )
-            plt.savefig(file_path, bbox_inches="tight")
+            axes.set_xlabel("Month", labelpad=20, fontsize=14)
+            axes.set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
+            axes.legend(loc="upper center", fontsize=14)
+            axes.set_title(f"Savings Game round {n+1}", fontsize=14)
 
-        plt.show()
+            ax = axes.twinx()
+            sns.lineplot(
+                ax=ax,
+                data=dfts[dfts["participant.round"] == n + 1],
+                legend=None,
+                x="month",
+                y="Savings",
+                palette="tab10",
+                hue="Strategy",
+                ci=None,
+            )
+            ax.set(xlabel=None)
+            ax.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
+
+            # * Reduce number of tick labels
+            ax.set_xticks(ax.get_xticks()[0:120:12])
+            ax.set_ylim(0, dfts["Savings"].max() + 500)
+
+            if export_figs == "y":
+                fig_name = n + 1
+                file_path = (
+                    Path(__file__).parents[1]
+                    / "results"
+                    / f"overall_performance_{fig_name}.png"
+                )
+                plt.savefig(file_path, bbox_inches="tight")
+
+            plt.show()
 
 
 if __name__ == "__main__":

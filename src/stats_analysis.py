@@ -236,7 +236,7 @@ def run_treatment_forward_selection(
 
 def main() -> None:
     """Run script"""
-    df_results = calculate_opportunity_costs()
+    df_results = calculate_opportunity_costs(con)
     logger.debug(df_results.shape)
 
     df_results = purchase_discontinuity(

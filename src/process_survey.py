@@ -12,7 +12,7 @@ import numpy.typing as npt
 import pandas as pd
 import seaborn as sns
 
-from src.utils.constants import INFLATION_DICT
+from src.utils.constants import EXP_2_DATABASE, INFLATION_DICT
 from src.utils.database import create_duckdb_database, table_exists
 from src.utils.helpers import combine_series
 from utils.logging_config import get_logger
@@ -21,7 +21,7 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 # * Declare duckdb database info
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 
 
 def calculate_estimate_bias(
@@ -234,7 +234,6 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
         ],
         how="left",
     )
-    logger.debug(df5.columns.to_list())
     # * Interpolate qualitative responses of no change as 0 for quantitative
     perception_cols = [f"task.{month*12}.player.inf_estimate" for month in range(1, 11)]
     qual_perception_cols = [
@@ -283,7 +282,6 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
             default=df5[quant],
         )
 
-    logger.debug(df5.columns.to_list())
     df_survey = df5.melt(
         id_vars=[
             "participant.code",
@@ -323,11 +321,9 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
         ],
         inplace=True,
     )
-    logger.debug(df_survey.info())
 
     # * Add actual inflation
     if include_inflation:
-        logger.debug("INFLATION_DICT %s", INFLATION_DICT)
         ## Convert to dataframe
         df_inf = pd.DataFrame(INFLATION_DICT)
         ## Merge with survey responses

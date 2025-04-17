@@ -73,7 +73,7 @@ def purchase_discontinuity(
 
 def main() -> None:
     """Run script"""
-    df_opp_cost = calculate_opportunity_costs()
+    df_opp_cost = calculate_opportunity_costs(con)
     df_disc = df_opp_cost[df_opp_cost.columns.to_list()[:13]].copy()
     print(df_disc.head())
 

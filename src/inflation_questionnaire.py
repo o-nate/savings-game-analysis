@@ -11,13 +11,14 @@ import seaborn as sns
 from functools import reduce
 
 from src import calc_opp_costs
+from src.utils.constants import EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
 # * Logging settings
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / "database.duckdb"
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 con = duckdb.connect(DATABASE_FILE, read_only=False)
 
 
@@ -64,7 +65,7 @@ inf_behavior_cols = [
     "inflation_score",
 ]
 # %%
-df2 = calc_opp_costs.calculate_opportunity_costs()
+df2 = calc_opp_costs.calculate_opportunity_costs(con)
 df2 = df2.merge(df[["participant.label"] + inf_behavior_cols], how="left")
 
 for c in inf_behavior_cols:

@@ -1,10 +1,6 @@
 """Tests for process_survey module"""
 
-import logging
 import math
-import sys
-
-import numpy as np
 
 from utils import constants
 

@@ -54,7 +54,7 @@ def create_performance_measures_table(
 
 
 # %%
-df_opp_cost = calc_opp_costs.calculate_opportunity_costs()
+df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
 
 # %%
 df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
@@ -174,12 +174,13 @@ CONDITIONS = [
 ]
 
 df_personas[f"quant_expectation_pattern_12"] = np.select(
-    condlist=CONDITIONS, choicelist=PERSONAS, default=np.nan
+    condlist=CONDITIONS, choicelist=PERSONAS, default="N/A"
 )
 df_decisions = df_decisions.merge(
-    df_personas[["participant.code", "treatment", "quant_expectation_pattern_12"]]
+    df_personas[["participant.code", "treatment", "quant_expectation_pattern_12"]],
+    how="left",
 )
-df_decisions = df_decisions[df_decisions["quant_expectation_pattern_12"] != "nan"]
+df_decisions = df_decisions[df_decisions["quant_expectation_pattern_12"] != "N/A"]
 print(df_decisions.shape)
 
 # %%
@@ -226,15 +227,16 @@ CONDITIONS = [
 ]
 
 data[f"qual_expectation_pattern_12"] = np.select(
-    condlist=CONDITIONS, choicelist=PERSONAS, default=np.nan
+    condlist=CONDITIONS, choicelist=PERSONAS, default="N/A"
 )
 
 # * Add column for persona based on MAX_RATIONAL_STOCK to track how distribution changes
 df_personas = df_personas.merge(data, how="left")
 df_decisions = df_decisions.merge(
-    df_personas[["participant.code", "treatment", "qual_expectation_pattern_12"]]
+    df_personas[["participant.code", "treatment", "qual_expectation_pattern_12"]],
+    how="left",
 )
-df_decisions = df_decisions[df_decisions["qual_expectation_pattern_12"] != "nan"]
+df_decisions = df_decisions[df_decisions["qual_expectation_pattern_12"] != "N/A"]
 
 print(df_decisions.shape)
 
@@ -298,7 +300,7 @@ df_personas["quant_expectation_pattern_36"] = np.select(
 df_decisions = df_decisions.merge(
     df_personas[["participant.code", "treatment", "quant_expectation_pattern_36"]]
 )
-df_decisions = df_decisions[df_decisions["quant_expectation_pattern_36"] != "nan"]
+df_decisions = df_decisions[df_decisions["quant_expectation_pattern_36"] != "N/A"]
 
 
 print(df_decisions.shape)
@@ -373,7 +375,7 @@ df_personas["qual_expectation_pattern_36"] = np.select(
 df_decisions = df_decisions.merge(
     df_personas[["participant.code", "treatment", "qual_expectation_pattern_36"]]
 )
-df_decisions = df_decisions[df_decisions["qual_expectation_pattern_36"] != "nan"]
+df_decisions = df_decisions[df_decisions["qual_expectation_pattern_36"] != "N/A"]
 
 print(df_decisions.shape)
 

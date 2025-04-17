@@ -479,7 +479,7 @@ def create_detailed_effects_table(results: dict) -> pd.DataFrame:
 
 def main() -> None:
 
-    df_opp_cost = calc_opp_costs.calculate_opportunity_costs()
+    df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con)
 
     df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
     df_opp_cost.head()

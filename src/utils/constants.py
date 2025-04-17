@@ -1,9 +1,24 @@
 """Constants for src modules"""
 
+# * Exp data info
+EXP_1_FILE = "all_apps_wide_2023-02-27.csv"
+EXP_2_FILE = "all_apps_wide_2024-07-08.csv"
+
+# * DuckDB info
+EXP_1_DATABASE = "exp1.duckdb"
+EXP_2_DATABASE = "exp2.duckdb"
+
 # * Savings Game initial parameters
 INITIAL_ENDOWMENT = 863.81
 INTEREST_RATE = 0.2277300 / 12
+ANNUAL_INTEREST_RATE = ((1 + INTEREST_RATE) ** 12 - 1) * 100
 WAGE = 4.32
+
+# * For column name conversion
+EXP_1_COLUMNS_HASH = {
+    "participant.intervention": "treatment",
+    "phase": "participant.round",
+}
 
 # * Define annualized inflation, per 12 months
 INF_1012 = [0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79]
@@ -52,3 +67,13 @@ QUESTIONS = {
 
 # * Stats analysis
 BONFERRONI_ALPHA = 0.05
+
+# * Decision patterns parameters
+PERSONAS = ["AC", "AI", "IC", "II"]
+DECISION_PATTERN_MEASURES = [
+    "Quant Perception",
+    "Quant Expectation",
+    "Qual Expectation",
+]
+QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_12 = 2
+QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_36 = 1
