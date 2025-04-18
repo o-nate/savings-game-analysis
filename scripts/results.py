@@ -51,6 +51,28 @@ con_exp_2 = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 export_all_plots = input("Export all plots? (y/n) ").lower() == "y"
 FILE_PATH = Path(__file__).parents[1] / "results"
 
+# %%
+ACCURATE_PERCEPTIONS_THRESHOLD = 0.75
+COLS = [
+    "participant.code",
+    "treatment",
+    "participant.round",
+    "Month",
+    "decision",
+    "finalStock",
+    "Perception_sensitivity",
+    "perception_accuracy",
+    "total_phase_purchases",
+    "initial_stock",
+    "constrained_purchases",
+    "unconstrained_purchases",
+    "unconstrained_purchases_12",
+    "unconstrained_purchases_30",
+    "unconstrained_purchases_42",
+    "purchase_adaptation_30",
+    "purchase_adaptation_12",
+]
+
 # %% [markdown]
 ## Descriptive statistics: Subjects
 if not table_exists(con_exp_1, "Questionnaire"):
@@ -93,6 +115,91 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
     "finalSavings_120"
 ].bfill()
 
+# %% [markdown]
+## Classify behavioral patterns
+# Back-fill inflation measures to be able to compare during each inflation phase
+for measure in [
+    "Perception_bias",
+    "Perception_sensitivity",
+    "Expectation_bias",
+    "Expectation_sensitivity",
+]:
+    df_decisions_1[measure] = df_decisions_1.groupby("participant.code")[
+        measure
+    ].bfill()
+
+df_decisions_1["perception_accuracy"] = decision_patterns.classify_perception(
+    df_decisions_1["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
+)
+df_decisions_1["total_phase_purchases"] = df_decisions_1.groupby("participant.code")[
+    "decision"
+].transform(lambda x: x.rolling(12).sum())
+df_decisions_1["initial_stock"] = df_decisions_1.groupby("participant.code")[
+    "finalStock"
+].shift(11)
+df_decisions_1["constrained_purchases"] = np.maximum(
+    (12 - df_decisions_1["initial_stock"]), 0
+)
+df_decisions_1["unconstrained_purchases"] = (
+    df_decisions_1["total_phase_purchases"] - df_decisions_1["constrained_purchases"]
+)
+df_decisions_1["unconstrained_purchases_12"] = np.where(
+    df_decisions_1["Month"] == 12, df_decisions_1["unconstrained_purchases"], np.nan
+)
+df_decisions_1["unconstrained_purchases_30"] = np.where(
+    df_decisions_1["Month"] == 30, df_decisions_1["unconstrained_purchases"], np.nan
+)
+df_decisions_1["unconstrained_purchases_42"] = np.where(
+    df_decisions_1["Month"] == 42, df_decisions_1["unconstrained_purchases"], np.nan
+)
+df_decisions_1[
+    [
+        "unconstrained_purchases_12",
+        "unconstrained_purchases_30",
+        "unconstrained_purchases_42",
+    ]
+] = (
+    df_decisions_1.groupby("participant.code")[
+        [
+            "unconstrained_purchases_12",
+            "unconstrained_purchases_30",
+            "unconstrained_purchases_42",
+        ]
+    ]
+    .bfill()
+    .ffill()
+)
+df_decisions_1["purchase_adaptation_12"] = np.where(
+    df_decisions_1["unconstrained_purchases_42"]
+    > df_decisions_1["unconstrained_purchases_12"],
+    "P",
+    "N",
+)
+df_decisions_1["purchase_adaptation_30"] = np.where(
+    df_decisions_1["unconstrained_purchases_42"]
+    > df_decisions_1["unconstrained_purchases_30"],
+    "P",
+    "N",
+)
+df_decisions_1["decision_pattern_12"] = (
+    df_decisions_1["perception_accuracy"] + df_decisions_1["purchase_adaptation_12"]
+)
+df_decisions_1["decision_pattern_30"] = (
+    df_decisions_1["perception_accuracy"] + df_decisions_1["purchase_adaptation_30"]
+)
+
+df_decisions_1[
+    (df_decisions_1["Month"] == 1) & (df_decisions_1["participant.round"] == 1)
+].value_counts(
+    [
+        "purchase_adaptation_12",
+        # "purchase_adaptation_30",
+        "decision_pattern_12",
+        # "decision_pattern_30",
+    ]
+)
+
+# %%
 df_decisions_1 = decision_patterns.classify_subject_decision_patterns(
     data=df_decisions_1,
     estimate_measure="Quant Perception",
