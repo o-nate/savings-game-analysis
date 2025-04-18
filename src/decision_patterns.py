@@ -101,7 +101,7 @@ def define_decision_patterns(
     estimate_measure: str,
     decision_measure: str,
     threshold_estimate: int | float,
-    coherent_decision: str,
+    coherent_decision: int | float,
     month: int,
 ) -> dict[str, list]:
     if month <= 12:
@@ -169,6 +169,79 @@ def compare_decision_pattern_changes(
                 pivot_table[col] = pd.Categorical(pivot_table[col], PERSONAS)
 
     return pivot_table
+
+
+def classify_new_decision_patterns(
+    data: pd.DataFrame, decision_column: str, perception_column: str
+) -> pd.Series:
+    return data[perception_column] + data[decision_column]
+
+
+def classify_perception(
+    data: pd.Series,
+    accuracy_threshold: float,
+    accurate_label: str = "A",
+    inaccurate_label: str = "I",
+) -> pd.Series:
+    return np.where(data >= accuracy_threshold, accurate_label, inaccurate_label)
+
+
+def classify_purchase_adaptation(
+    data: pd.DataFrame,
+    comparison_start_month: int = 12,
+    comparison_end_month: int = 42,
+    positive_adaptation_label: str = "P",
+    negative_adaptation_label: str = "N",
+    keep_intermediate_columns: bool = False,
+) -> pd.Series | pd.DataFrame:
+    data_copy = data.copy()
+    data_copy["total_phase_purchases"] = data_copy.groupby("participant.code")[
+        "decision"
+    ].transform(lambda x: x.rolling(12).sum())
+    data_copy["initial_stock"] = data_copy.groupby("participant.code")[
+        "finalStock"
+    ].shift(11)
+    data_copy["constrained_purchases"] = np.maximum(
+        (12 - data_copy["initial_stock"]), 0
+    )
+    data_copy["unconstrained_purchases"] = (
+        data_copy["total_phase_purchases"] - data_copy["constrained_purchases"]
+    )
+    data_copy[f"unconstrained_purchases_{comparison_start_month}"] = np.where(
+        data_copy["Month"] == comparison_start_month,
+        data_copy["unconstrained_purchases"],
+        np.nan,
+    )
+    data_copy[f"unconstrained_purchases_{comparison_end_month}"] = np.where(
+        data_copy["Month"] == comparison_end_month,
+        data_copy["unconstrained_purchases"],
+        np.nan,
+    )
+    data_copy[
+        [
+            f"unconstrained_purchases_{comparison_start_month}",
+            f"unconstrained_purchases_{comparison_end_month}",
+        ]
+    ] = (
+        data_copy.groupby("participant.code")[
+            [
+                f"unconstrained_purchases_{comparison_start_month}",
+                f"unconstrained_purchases_{comparison_end_month}",
+            ]
+        ]
+        .bfill()
+        .ffill()
+    )
+
+    if keep_intermediate_columns:
+        return data_copy
+
+    return np.where(
+        data_copy[f"unconstrained_purchases_{comparison_end_month}"]
+        > data_copy[f"unconstrained_purchases_{comparison_start_month}"],
+        positive_adaptation_label,
+        negative_adaptation_label,
+    )
 
 
 def main() -> None:

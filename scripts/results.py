@@ -53,6 +53,7 @@ FILE_PATH = Path(__file__).parents[1] / "results"
 
 # %%
 ACCURATE_PERCEPTIONS_THRESHOLD = 0.75
+ACCURATE_QUALITATIVE_THRESHOLD = 3
 COLS = [
     "participant.code",
     "treatment",
@@ -74,13 +75,13 @@ COLS = [
 ]
 
 # %% [markdown]
-## Descriptive statistics: Subjects
 if not table_exists(con_exp_1, "Questionnaire"):
     create_duckdb_database(con_exp_1, experiment=1, initial_creation=True)
 if not table_exists(con_exp_2, "Questionnaire"):
     create_duckdb_database(con_exp_2, experiment=2, initial_creation=True)
 
-# %%
+# %% [markdown]
+## Experiment 1
 df_expectations = con_exp_1.sql("SELECT * FROM inf_expectation").df()
 df_perceptions = con_exp_1.sql("SELECT * FROM inf_estimate").df()
 
@@ -116,8 +117,7 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
 ].bfill()
 
 # %% [markdown]
-## Classify behavioral patterns
-# Back-fill inflation measures to be able to compare during each inflation phase
+### Classify behavioral patterns
 for measure in [
     "Perception_bias",
     "Perception_sensitivity",
@@ -131,71 +131,26 @@ for measure in [
 df_decisions_1["perception_accuracy"] = decision_patterns.classify_perception(
     df_decisions_1["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
 )
-df_decisions_1["total_phase_purchases"] = df_decisions_1.groupby("participant.code")[
-    "decision"
-].transform(lambda x: x.rolling(12).sum())
-df_decisions_1["initial_stock"] = df_decisions_1.groupby("participant.code")[
-    "finalStock"
-].shift(11)
-df_decisions_1["constrained_purchases"] = np.maximum(
-    (12 - df_decisions_1["initial_stock"]), 0
-)
-df_decisions_1["unconstrained_purchases"] = (
-    df_decisions_1["total_phase_purchases"] - df_decisions_1["constrained_purchases"]
-)
-df_decisions_1["unconstrained_purchases_12"] = np.where(
-    df_decisions_1["Month"] == 12, df_decisions_1["unconstrained_purchases"], np.nan
-)
-df_decisions_1["unconstrained_purchases_30"] = np.where(
-    df_decisions_1["Month"] == 30, df_decisions_1["unconstrained_purchases"], np.nan
-)
-df_decisions_1["unconstrained_purchases_42"] = np.where(
-    df_decisions_1["Month"] == 42, df_decisions_1["unconstrained_purchases"], np.nan
-)
-df_decisions_1[
-    [
-        "unconstrained_purchases_12",
-        "unconstrained_purchases_30",
-        "unconstrained_purchases_42",
-    ]
-] = (
-    df_decisions_1.groupby("participant.code")[
-        [
-            "unconstrained_purchases_12",
-            "unconstrained_purchases_30",
-            "unconstrained_purchases_42",
-        ]
-    ]
-    .bfill()
-    .ffill()
-)
-df_decisions_1["purchase_adaptation_12"] = np.where(
-    df_decisions_1["unconstrained_purchases_42"]
-    > df_decisions_1["unconstrained_purchases_12"],
-    "P",
-    "N",
-)
-df_decisions_1["purchase_adaptation_30"] = np.where(
-    df_decisions_1["unconstrained_purchases_42"]
-    > df_decisions_1["unconstrained_purchases_30"],
-    "P",
-    "N",
-)
-df_decisions_1["decision_pattern_12"] = (
-    df_decisions_1["perception_accuracy"] + df_decisions_1["purchase_adaptation_12"]
-)
-df_decisions_1["decision_pattern_30"] = (
-    df_decisions_1["perception_accuracy"] + df_decisions_1["purchase_adaptation_30"]
-)
+for month in [12, 30]:
+    df_decisions_1[f"purchase_adaptation_{month}"] = (
+        decision_patterns.classify_purchase_adaptation(
+            df_decisions_1, comparison_start_month=month
+        )
+    )
+    df_decisions_1[f"decision_pattern_{month}"] = (
+        decision_patterns.classify_new_decision_patterns(
+            df_decisions_1, f"purchase_adaptation_{month}", "perception_accuracy"
+        )
+    )
 
 df_decisions_1[
     (df_decisions_1["Month"] == 1) & (df_decisions_1["participant.round"] == 1)
 ].value_counts(
     [
-        "purchase_adaptation_12",
+        # "purchase_adaptation_12",
         # "purchase_adaptation_30",
-        "decision_pattern_12",
-        # "decision_pattern_30",
+        # "decision_pattern_12",
+        "decision_pattern_30",
     ]
 )
 
@@ -243,7 +198,8 @@ pattern_changes = decision_patterns.compare_decision_pattern_changes(
     True,
 )
 
-# %%
+# %% [markdown]
+### Transition matrices
 fig, axs = plt.subplots(2, 2, figsize=(15, 15), sharex=True, sharey=True)
 for i, treatment in zip(range(2), ["intervention", "control"]):
     subset = pattern_changes[pattern_changes.index.isin([treatment], level=1)]
@@ -293,7 +249,8 @@ for i, treatment in zip(range(2), ["intervention", "control"]):
     axs[1][i].set_ylabel("Round 2")
     axs[1][i].set_title(treatment)
 
-# %%
+# %% [markdown]
+## Experiment 2
 df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con_exp_2, experiment=2)
 
 df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
@@ -329,6 +286,62 @@ df_decisions_2["finalSavings_120"] = df_decisions_2.groupby("participant.code")[
     "finalSavings_120"
 ].bfill()
 
+# %% [markdown]
+### Classify behavioral patterns
+for measure in [
+    "Perception_bias",
+    "Perception_sensitivity",
+    "Expectation_bias",
+    "Expectation_sensitivity",
+]:
+    df_decisions_2[measure] = df_decisions_2.groupby("participant.code")[
+        measure
+    ].bfill()
+
+df_decisions_2["perception_accuracy"] = decision_patterns.classify_perception(
+    df_decisions_2["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
+)
+
+# * Include qualitative perceptions for Experiment 2
+df_decisions_2["qualitative_perception_36"] = np.where(
+    df_decisions_2["Month"] == 36, df_decisions_2["Qual Perception"], np.nan
+)
+df_decisions_2["qualitative_perception_36"] = (
+    df_decisions_2["qualitative_perception_36"].bfill().ffill()
+)
+df_decisions_2["qualitative_perception_accuracy"] = (
+    decision_patterns.classify_perception(
+        df_decisions_2["qualitative_perception_36"], ACCURATE_QUALITATIVE_THRESHOLD
+    )
+)
+
+for month in [12, 30]:
+    df_decisions_2[f"purchase_adaptation_{month}"] = (
+        decision_patterns.classify_purchase_adaptation(
+            df_decisions_2, comparison_start_month=month
+        )
+    )
+    for inflation_measure in ["perception_accuracy", "qualitative_perception_accuracy"]:
+        df_decisions_2[f"decision_pattern_{month}_{inflation_measure}"] = (
+            decision_patterns.classify_new_decision_patterns(
+                df_decisions_2, f"purchase_adaptation_{month}", inflation_measure
+            )
+        )
+
+df_decisions_2[
+    (df_decisions_2["Month"] == 1) & (df_decisions_2["participant.round"] == 1)
+].value_counts(
+    [
+        # "purchase_adaptation_12",
+        # "purchase_adaptation_30",
+        # "decision_pattern_12_perception_accuracy",
+        # "decision_pattern_12_qualitative_perception_accuracy",
+        # "decision_pattern_30_perception_accuracy",
+        "decision_pattern_30_qualitative_perception_accuracy",
+    ]
+)
+
+# %%
 df_decisions_2 = decision_patterns.classify_subject_decision_patterns(
     data=df_decisions_2,
     estimate_measure="Quant Perception",
