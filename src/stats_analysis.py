@@ -1,13 +1,14 @@
 """Statistical analysis of data"""
 
 import logging
-from typing import List, Tuple, Type
+from typing import Any, Type
 
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import pearsonr, pointbiserialr
+from scipy.stats import pearsonr, pointbiserialr, mannwhitneyu, ttest_ind
+
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from statsmodels.stats.multitest import multipletests
@@ -32,9 +33,36 @@ DECISION_QUANTITY = "cum_decision"
 WINDOW = 3
 
 
+def apply_statistical_test(
+    data: pd.DataFrame,
+    measure_column: str,
+    group_column: str,
+    group1: int | float | str,
+    group2: int | float | str,
+    test: str = "ttest",
+    **kwargs,
+) -> Any:
+    a = data[data[group_column] == group1][measure_column]
+    b = data[data[group_column] == group2][measure_column]
+    logger.info(
+        "Means: %s | %s",
+        np.mean(data[data[group_column] == group1][measure_column]),
+        np.mean(data[data[group_column] == group2][measure_column]),
+    )
+    logger.info(
+        "Variances: %s | %s",
+        np.var(data[data[group_column] == group1][measure_column]),
+        np.var(data[data[group_column] == group2][measure_column]),
+    )
+    if test == "mannwhitneyu":
+        return mannwhitneyu(a, b, **kwargs)
+    if test == "ttest":
+        return ttest_ind(a, b, **kwargs)
+
+
 def create_pearson_correlation_matrix(
     data: pd.DataFrame,
-    p_values: List[float],
+    p_values: list[float],
     include_stars: bool = True,
     display: bool = False,
     decimal_places: int = 2,
@@ -69,19 +97,19 @@ def create_pearson_correlation_matrix(
 
 def create_bonferroni_correlation_table(
     data: pd.DataFrame,
-    measures_1: List[str],
-    measures_2: List[str],
+    measures_1: list[str],
+    measures_2: list[str],
     correlation: str,
     decimal_places: int = 4,
     filtered_results: bool = True,
-) -> Tuple[pd.DataFrame, List[float]]:
+) -> tuple[pd.DataFrame, list[float]]:
     """Create table with Bonferroni-corrected correlations
 
     Args:
         data (pd.DataFrame): DataFrame with each subjects' individual characteristic
         and task measures
-        measures_1 (List[str]): first list of measures to correlate
-        measures_2 (List[str]): second list of measures to correlate
+        measures_1 (list[str]): first list of measures to correlate
+        measures_2 (list[str]): second list of measures to correlate
         correlation (str): test to apply (pearson, pointbiserial)
         decimal_places (int): decimal places to round to. Defaults to 4
         filtered_results (bool): toggle whether to return only results that pass
@@ -92,7 +120,7 @@ def create_bonferroni_correlation_table(
         is required.
 
     Returns:
-        Tuple[pd.DataFrame, List[float]]: Tuple of DataFrame with correlation and p-values
+        tuple[pd.DataFrame, list[float]]: Tuple of DataFrame with correlation and p-values
         and list of raw p values
     """
     raw_pvals = []
@@ -142,7 +170,7 @@ def create_bonferroni_correlation_table(
 
 
 def run_forward_selection(
-    data: pd.DataFrame, response: str, categoricals: List[str]
+    data: pd.DataFrame, response: str, categoricals: list[str]
 ) -> Type[sm.regression.linear_model.RegressionResultsWrapper]:
     """Conduct forward selection of feature variables. The algorithm's objective is
     to maximize adjusted R^2.
@@ -190,7 +218,7 @@ def run_forward_selection(
 def run_treatment_forward_selection(
     data: pd.DataFrame,
     response: str,
-    categoricals: List[str],
+    categoricals: list[str],
     treatment: str = "treatment",
 ) -> Type[sm.regression.linear_model.RegressionResultsWrapper]:
     """Conduct forward selection of feature variables of treatment regression.

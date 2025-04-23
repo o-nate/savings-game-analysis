@@ -18,6 +18,7 @@ from src import calc_opp_costs, decision_patterns, process_survey
 from src.utils import exp_1_patches
 
 from src.stats_analysis import (
+    apply_statistical_test,
     create_bonferroni_correlation_table,
     create_pearson_correlation_matrix,
     run_forward_selection,
@@ -487,10 +488,23 @@ for i, treatment in zip(range(3), ["Intervention 2", "Intervention 1", "Control"
 plt.show()
 
 # %%
+df_decisions_1["exp"] = 1
+df_decisions_1 = df_decisions_1.rename(
+    columns={"decision_pattern_30": "decision_pattern"}
+)
+df_decisions_1["qual_decision_pattern"] = np.nan
+df_decisions_2["exp"] = 2
+df_decisions_2 = df_decisions_2.rename(
+    columns={
+        "decision_pattern_30_perception_accuracy": "decision_pattern",
+        "decision_pattern_30_qualitative_perception_accuracy": "qual_decision_pattern",
+    }
+)
 cols = [
     "participant.code",
+    "exp",
     "Month",
-    "Quant Perception_pattern_12",
+    "decision_pattern",
     "sreal_%",
     "early_%",
     "excess_%",
@@ -503,14 +517,14 @@ new_cols = {
 }
 df_decisions_all = pd.concat(
     [
-        df_decisions_1[df_decisions_1["participant.round"] == 1][cols],
-        df_decisions_2[df_decisions_2["participant.round"] == 1][cols],
+        df_decisions_1[df_decisions_1["participant.round"] == 1],
+        df_decisions_2[df_decisions_2["participant.round"] == 1],
     ]
 )
 
 summary = (
-    df_decisions_all[df_decisions_all["Month"] == 120]
-    .groupby("Quant Perception_pattern_12")
+    df_decisions_all[df_decisions_all["Month"] == 120][cols]
+    .groupby(["decision_pattern"])
     .describe()[
         [
             ("Month", "count"),
@@ -538,3 +552,73 @@ summary.loc[len(summary)] = [
     summary_all["Wasteful-stocking (%)"].iat[0] * 100,
 ]
 summary
+
+# %% [markdown]
+## Test difference between experiments
+# * Only compare participants from Experiment 1 who had 4x30 on day 1
+df_decisions_1_1 = df_decisions_1.merge(
+    df_expectations[["participant.code", "participant.day"]], how="left"
+)
+df_decisions_1_1 = df_decisions_1_1[df_decisions_1_1["participant.day"] == 1].drop(
+    columns="participant.day"
+)
+
+df_decisions_all_1 = pd.concat(
+    [
+        df_decisions_1_1[df_decisions_1_1["participant.round"] == 1],
+        df_decisions_2[df_decisions_2["participant.round"] == 1],
+    ]
+)
+
+df_decisions_all_1["mean_perception_bias"] = df_decisions_all_1.groupby(
+    "participant.code"
+)["Perception_bias"].transform("mean")
+
+result = apply_statistical_test(
+    df_decisions_all_1[
+        (df_decisions_all_1["Month"] == 120)
+        & (df_decisions_all_1["participant.round"] == 1)
+    ],
+    measure_column="sreal_%",
+    group_column="exp",
+    group1=1,
+    group2=2,
+    test="mannwhitneyu",
+)
+print(f"Total performance p-value: {result.pvalue}")
+result = apply_statistical_test(
+    df_decisions_all_1[
+        (df_decisions_all_1["Month"] == 120)
+        & (df_decisions_all_1["participant.round"] == 1)
+    ],
+    measure_column="early_%",
+    group_column="exp",
+    group1=1,
+    group2=2,
+    test="mannwhitneyu",
+)
+print(f"Over-stocking p-value: {result.pvalue}")
+result = apply_statistical_test(
+    df_decisions_all_1[
+        (df_decisions_all_1["Month"] == 120)
+        & (df_decisions_all_1["participant.round"] == 1)
+    ],
+    measure_column="Perception_sensitivity",
+    group_column="exp",
+    group1=1,
+    group2=2,
+    test="mannwhitneyu",
+)
+print(f"Perception sensitivity p-value: {result.pvalue}")
+result = apply_statistical_test(
+    df_decisions_all_1[
+        (df_decisions_all_1["Month"] == 120)
+        & (df_decisions_all_1["participant.round"] == 1)
+    ],
+    measure_column="mean_perception_bias",
+    group_column="exp",
+    group1=1,
+    group2=2,
+    test="mannwhitneyu",
+)
+print(f"Perception bias p-value: {result.pvalue}")
