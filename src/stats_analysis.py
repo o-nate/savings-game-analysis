@@ -45,12 +45,14 @@ def apply_statistical_test(
     a = data[data[group_column] == group1][measure_column]
     b = data[data[group_column] == group2][measure_column]
     logger.info(
-        "Means: %s | %s",
+        "Means for %s: %s | %s",
+        test,
         np.mean(data[data[group_column] == group1][measure_column]),
         np.mean(data[data[group_column] == group2][measure_column]),
     )
     logger.info(
-        "Variances: %s | %s",
+        "Variances for %s: %s | %s",
+        test,
         np.var(data[data[group_column] == group1][measure_column]),
         np.var(data[data[group_column] == group2][measure_column]),
     )
