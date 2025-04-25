@@ -183,7 +183,9 @@ def classify_perception(
     accurate_label: str = "A",
     inaccurate_label: str = "I",
 ) -> pd.Series:
-    return np.where(data >= accuracy_threshold, accurate_label, inaccurate_label)
+    conditions = [data >= accuracy_threshold, data < accuracy_threshold]
+    choices = [accurate_label, inaccurate_label]
+    return np.select(conditions, choices, default="")
 
 
 def classify_purchase_adaptation(

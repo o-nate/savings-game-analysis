@@ -122,43 +122,6 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
 
 # %% [markdown]
 ### Classify behavioral patterns
-for measure in [
-    "Perception_bias",
-    "Perception_sensitivity",
-    "Expectation_bias",
-    "Expectation_sensitivity",
-]:
-    df_decisions_1[measure] = df_decisions_1.groupby("participant.code")[
-        measure
-    ].bfill()
-
-df_decisions_1["perception_accuracy"] = decision_patterns.classify_perception(
-    df_decisions_1["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
-)
-for month in [12, 30]:
-    df_decisions_1[f"purchase_adaptation_{month}"] = (
-        decision_patterns.classify_purchase_adaptation(
-            df_decisions_1, comparison_start_month=month
-        )
-    )
-    df_decisions_1[f"decision_pattern_{month}"] = (
-        decision_patterns.classify_new_decision_patterns(
-            df_decisions_1, f"purchase_adaptation_{month}", "perception_accuracy"
-        )
-    )
-
-df_decisions_1[
-    (df_decisions_1["Month"] == 1)
-    & (df_decisions_1["participant.round"] == 1)
-    & (df_decisions_1["participant.inflation"] == 430)
-].value_counts(
-    [
-        # "purchase_adaptation_12",
-        # "purchase_adaptation_30",
-        # "decision_pattern_12",
-        "decision_pattern_30",
-    ]
-)
 
 # %% [markdown]
 ## Experiment 2
@@ -198,74 +161,9 @@ df_decisions_2["finalSavings_120"] = df_decisions_2.groupby("participant.code")[
     "finalSavings_120"
 ].bfill()
 
-# %% [markdown]
-### Classify behavioral patterns
-for measure in [
-    "Perception_bias",
-    "Perception_sensitivity",
-    "Expectation_bias",
-    "Expectation_sensitivity",
-]:
-    df_decisions_2[measure] = df_decisions_2.groupby("participant.code")[
-        measure
-    ].bfill()
-
-df_decisions_2["perception_accuracy"] = decision_patterns.classify_perception(
-    df_decisions_2["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
-)
-
-# * Include qualitative perceptions for Experiment 2
-df_decisions_2["qualitative_perception_36"] = np.where(
-    df_decisions_2["Month"] == 36, df_decisions_2["Qual Perception"], np.nan
-)
-df_decisions_2["qualitative_perception_36"] = (
-    df_decisions_2["qualitative_perception_36"].bfill().ffill()
-)
-df_decisions_2["qualitative_perception_accuracy"] = (
-    decision_patterns.classify_perception(
-        df_decisions_2["qualitative_perception_36"], ACCURATE_QUALITATIVE_THRESHOLD
-    )
-)
-
-for month in [12, 30]:
-    df_decisions_2[f"purchase_adaptation_{month}"] = (
-        decision_patterns.classify_purchase_adaptation(
-            df_decisions_2, comparison_start_month=month
-        )
-    )
-    for inflation_measure in ["perception_accuracy", "qualitative_perception_accuracy"]:
-        df_decisions_2[f"decision_pattern_{month}_{inflation_measure}"] = (
-            decision_patterns.classify_new_decision_patterns(
-                df_decisions_2, f"purchase_adaptation_{month}", inflation_measure
-            )
-        )
-
-df_decisions_2[
-    (df_decisions_2["Month"] == 1) & (df_decisions_2["participant.round"] == 1)
-].value_counts(
-    [
-        # "purchase_adaptation_12",
-        # "purchase_adaptation_30",
-        # "decision_pattern_12_perception_accuracy",
-        # "decision_pattern_12_qualitative_perception_accuracy",
-        # "decision_pattern_30_perception_accuracy",
-        "decision_pattern_30_qualitative_perception_accuracy",
-    ]
-)
-
 # %%
 df_decisions_1["exp"] = 1
-df_decisions_1 = df_decisions_1.rename(
-    columns={"decision_pattern_30": "decision_pattern"}
-)
-df_decisions_1["qual_decision_pattern"] = np.nan
 df_decisions_2["exp"] = 2
-df_decisions_2 = df_decisions_2.rename(
-    columns={
-        "decision_pattern_30_perception_accuracy": "decision_pattern",
-        "decision_pattern_30_qualitative_perception_accuracy": "qual_decision_pattern",
-    }
-)
 cols = [
     "sreal_%",
     "early_%",
@@ -290,7 +188,7 @@ df_decisions_all = pd.concat(
             & (df_decisions_1["participant.day"] == 1)
         ],
     ]
-)
+).reset_index()
 
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
@@ -349,3 +247,139 @@ for measure in [
         test="mannwhitneyu",
     )
     print(f"{measure} p-value: {result.pvalue}")
+
+
+# %% [markdown]
+### Classify behavioral patterns
+for measure in [
+    "Perception_bias",
+    "Perception_sensitivity",
+    "Expectation_bias",
+    "Expectation_sensitivity",
+]:
+    df_decisions_all[measure] = df_decisions_all.groupby("participant.code")[
+        measure
+    ].bfill()
+
+
+df_decisions_all["perception_accuracy"] = decision_patterns.classify_perception(
+    df_decisions_all["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
+)
+
+# * Include qualitative perceptions for Experiment 2
+df_decisions_all["qualitative_perception_36"] = (
+    df_decisions_all[df_decisions_all["Month"] == 36]
+    .groupby("participant.code")["Qual Perception"]
+    .transform("mean")
+)
+# df_decisions_all["qualitative_perception_36"] = np.where(
+#     df_decisions_all["Month"] == 36, df_decisions_all["Qual Perception"], np.nan
+# )
+df_decisions_all["qualitative_perception_36"] = (
+    df_decisions_all.groupby("participant.code")["qualitative_perception_36"]
+    .bfill()
+    .ffill()
+)
+df_decisions_all["qualitative_perception_accuracy"] = (
+    decision_patterns.classify_perception(
+        df_decisions_all["qualitative_perception_36"], ACCURATE_QUALITATIVE_THRESHOLD
+    )
+)
+
+for month in [12, 30]:
+    df_decisions_all[f"purchase_adaptation_{month}"] = (
+        decision_patterns.classify_purchase_adaptation(
+            df_decisions_all, comparison_start_month=month
+        )
+    )
+    for inflation_measure in ["perception_accuracy", "qualitative_perception_accuracy"]:
+        df_decisions_all[f"decision_pattern_{month}_{inflation_measure}"] = (
+            decision_patterns.classify_new_decision_patterns(
+                df_decisions_all, f"purchase_adaptation_{month}", inflation_measure
+            )
+        )
+
+# %%
+cols = [
+    "Month",
+    "sreal_%",
+    "early_%",
+    "excess_%",
+]
+new_cols = {
+    "Month": "Proportion (%)",
+    "sreal_%": "Total performance (%)",
+    "early_%": "Over-stocking (%)",
+    "excess_%": "Wasteful-stocking (%)",
+}
+
+# %%[markdown]
+#### Quantitative pattern
+summary = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120)
+        & (df_decisions_all["participant.inflation"] == 430)
+    ]
+    .groupby(["decision_pattern_30_perception_accuracy"])[cols]
+    .describe()[[(c, "count") if c == "Month" else (c, "mean") for c in cols]]
+    .reset_index()
+)
+
+# For overall performance, bottom row
+summary_all = df_decisions_all[
+    (df_decisions_all["Month"] == 120)
+    & (df_decisions_all["participant.day"] == 1)
+    & (df_decisions_all["participant.inflation"] == 430)
+].describe()
+summary_all = summary_all[summary_all.index == "mean"]
+summary_all = summary_all.rename(columns=new_cols)
+
+summary.columns = summary.columns.get_level_values(0)
+summary["Month"] = summary["Month"] / summary["Month"].sum()
+summary = summary.rename(columns=new_cols)
+summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
+
+summary.loc[len(summary)] = [
+    "Overall",
+    100,
+    summary_all["Total performance (%)"].iat[0] * 100,
+    summary_all["Over-stocking (%)"].iat[0] * 100,
+    summary_all["Wasteful-stocking (%)"].iat[0] * 100,
+]
+
+summary
+
+# %%[markdown]
+#### Qualitative pattern
+summary = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120) & (df_decisions_all["exp"] == 2)
+    ]
+    .groupby(["decision_pattern_30_qualitative_perception_accuracy"])[cols]
+    .describe()[[(c, "count") if c == "Month" else (c, "mean") for c in cols]]
+    .reset_index()
+)
+
+# For overall performance, bottom row
+summary_all = df_decisions_all[
+    (df_decisions_all["Month"] == 120) & (df_decisions_all["exp"] == 2)
+].describe()
+summary_all = summary_all[summary_all.index == "mean"]
+summary_all = summary_all.rename(columns=new_cols)
+
+summary.columns = summary.columns.get_level_values(0)
+summary["Month"] = summary["Month"] / summary["Month"].sum()
+summary = summary.rename(columns=new_cols)
+summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
+
+summary.loc[len(summary)] = [
+    "Overall",
+    100,
+    summary_all["Total performance (%)"].iat[0] * 100,
+    summary_all["Over-stocking (%)"].iat[0] * 100,
+    summary_all["Wasteful-stocking (%)"].iat[0] * 100,
+]
+
+summary
+
+# %%
