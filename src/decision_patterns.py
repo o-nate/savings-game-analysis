@@ -67,7 +67,7 @@ def classify_subject_decision_patterns(
         logger.info("Setting measure to: %s", measure)
         df[measure] = df.groupby("participant.code")[estimate_measure].shift(1)
     if estimate_measure != "Quant Perception" and month > 12:
-        d_measure = f"change_in_stock"
+        d_measure = "change_in_stock"
         logger.info("Setting decision measure to: %s", d_measure)
         df[f"previous_{decision_measure}"] = df.groupby("participant.code")[
             decision_measure

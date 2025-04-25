@@ -5,7 +5,7 @@ from pathlib import Path
 import duckdb
 
 from src.knowledge import count_correct_responses, create_knowledge_dataframe
-from src.utils.constants import EXP_2_DATABASE
+from src.utils.constants import EXP_1_DATABASE, EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
@@ -13,8 +13,10 @@ from tests.utils import constants
 
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
-con = duckdb.connect(DATABASE_FILE, read_only=False)
+DATABASE_FILE_1 = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
+DATABASE_FILE_2 = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
+
+con = duckdb.connect(DATABASE_FILE_2, read_only=False)
 if table_exists(con, "Inflation") == False:
     create_duckdb_database(con, initial_creation=True)
 
@@ -57,20 +59,30 @@ result = df[df["participant.code"] == constants.COMPOUND_PARTICIPANT_CODE][
 assert result == constants.SCORE
 
 logger.info("Testing knowledge dataframe creation")
-df = create_knowledge_dataframe()
+df = create_knowledge_dataframe(db_connection=con)
 result_fin = df[
     df["participant.label"] == constants.KNOWLEDGE_DATAFRAME_PARTICIPANT_LABEL
 ]["financial_literacy"].values[0]
 assert result_fin == constants.KNOWLEDGE_DATAFRAME_FIN_LIT_SCORE
-df = create_knowledge_dataframe()
+df = create_knowledge_dataframe(db_connection=con)
 result_fin = df[
     df["participant.label"] == constants.KNOWLEDGE_DATAFRAME_PARTICIPANT_LABEL
 ]["numeracy"].values[0]
 assert result_fin == constants.KNOWLEDGE_DATAFRAME_NUM_SCORE
-df = create_knowledge_dataframe()
+df = create_knowledge_dataframe(db_connection=con)
 result_fin = df[
     df["participant.label"] == constants.KNOWLEDGE_DATAFRAME_PARTICIPANT_LABEL
 ]["compound"].values[0]
 assert result_fin == constants.KNOWLEDGE_DATAFRAME_COMPOUND_SCORE
+
+logger.info("Testing knowledge measures for Experiment 1")
+
+con = duckdb.connect(DATABASE_FILE_1, read_only=False)
+if table_exists(con, "Inflation") == False:
+    create_duckdb_database(con, initial_creation=True)
+
+logger.info("Testing knowledge dataframe creation")
+df = create_knowledge_dataframe(db_connection=con)
+assert df.shape == (208, 5)
 
 logger.info("Testing complete")

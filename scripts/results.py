@@ -14,12 +14,19 @@ from statsmodels.iolib.summary2 import summary_col
 
 from scripts.utils import constants
 
-from src import calc_opp_costs, decision_patterns, process_survey
+from src import (
+    calc_opp_costs,
+    decision_patterns,
+    econ_preferences,
+    knowledge,
+    process_survey,
+)
 from src.utils import exp_1_patches
 
 from src.stats_analysis import (
     apply_statistical_test,
     create_bonferroni_correlation_table,
+    create_dynamic_correlation_matrix,
     create_pearson_correlation_matrix,
     run_forward_selection,
     run_treatment_forward_selection,
@@ -49,7 +56,7 @@ con_exp_1 = duckdb.connect(constants.EXP_1_DATABASE_FILE, read_only=False)
 con_exp_2 = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 
 # ! Export plots
-export_all_plots = input("Export all plots? (y/n) ").lower() == "y"
+# export_all_plots = input("Export all plots? (y/n) ").lower() == "y"
 FILE_PATH = Path(__file__).parents[1] / "results"
 
 # %%
@@ -74,8 +81,24 @@ COLS = [
     "purchase_adaptation_30",
     "purchase_adaptation_12",
 ]
+CORRELATION_COLS = [
+    "sreal_%",
+    "early_%",
+    "excess_%",
+    "Perception_sensitivity",
+    "purchase_adaptation_30",
+    "Quant Perception_pattern_12",
+    "financial_literacy",
+    "numeracy",
+    "compound",
+    "n_switches",
+    "wisconsin_choice_count",
+    "lossAversion_choice_count",
+    "riskPreferences_choice_count",
+    "timePreferences_choice_count",
+]
 
-# %% [markdown]
+# %%
 if not table_exists(con_exp_1, "Questionnaire"):
     create_duckdb_database(con_exp_1, experiment=1, initial_creation=True)
 if not table_exists(con_exp_2, "Questionnaire"):
@@ -119,9 +142,6 @@ df_decisions_1["finalSavings_120"] = (
 df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
     "finalSavings_120"
 ].bfill()
-
-# %% [markdown]
-### Classify behavioral patterns
 
 # %% [markdown]
 ## Experiment 2
@@ -179,16 +199,12 @@ new_cols = {
 }
 df_decisions_all = pd.concat(
     [
-        df_decisions_1[
-            (df_decisions_1["participant.round"] == 1)
-            & (df_decisions_1["participant.day"] == 1)
-        ],
-        df_decisions_2[
-            (df_decisions_2["participant.round"] == 1)
-            & (df_decisions_1["participant.day"] == 1)
-        ],
+        df_decisions_1[(df_decisions_1["participant.round"] == 1)],
+        df_decisions_2[(df_decisions_2["participant.round"] == 1)],
     ]
 ).reset_index()
+
+logger.debug("df_decisions_all.shape: %s"), df_decisions_all.shape
 
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
@@ -197,7 +213,9 @@ df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
 )
 
 summary = (
-    df_decisions_all[df_decisions_all["Month"] == 120]
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120) & (df_decisions_all["participant.day"] == 1)
+    ]
     .groupby(["exp", "participant.inflation"])[cols]
     .describe()[[(c, "mean") for c in cols]]
     .reset_index()
@@ -272,9 +290,6 @@ df_decisions_all["qualitative_perception_36"] = (
     .groupby("participant.code")["Qual Perception"]
     .transform("mean")
 )
-# df_decisions_all["qualitative_perception_36"] = np.where(
-#     df_decisions_all["Month"] == 36, df_decisions_all["Qual Perception"], np.nan
-# )
 df_decisions_all["qualitative_perception_36"] = (
     df_decisions_all.groupby("participant.code")["qualitative_perception_36"]
     .bfill()
@@ -318,6 +333,7 @@ new_cols = {
 summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120)
+        & (df_decisions_all["participant.day"] == 1)
         & (df_decisions_all["participant.inflation"] == 430)
     ]
     .groupby(["decision_pattern_30_perception_accuracy"])[cols]
@@ -382,4 +398,81 @@ summary.loc[len(summary)] = [
 
 summary
 
+# %% [markdown]
+## Behavioral measures
+df_behavioral = df_decisions_all[
+    (df_decisions_all["participant.day"] == 1)
+    & (df_decisions_all["participant.inflation"] == 430)
+]
+
+df_behavioral = decision_patterns.classify_subject_decision_patterns(
+    data=df_behavioral,
+    estimate_measure="Quant Perception",
+    decision_measure="finalStock",
+    month=12,
+    coherent_decision=0,
+    threshold_estimate=ANNUAL_INTEREST_RATE,
+)
+
+# * Remove perception accuracy to only compare coherent decisions
+df_behavioral["Quant Perception_pattern_12"] = df_behavioral[
+    "Quant Perception_pattern_12"
+].str[1]
+
+# * Set both purchase adapations as binary variables
+df_behavioral["Quant Perception_pattern_12"] = np.where(
+    df_behavioral["Quant Perception_pattern_12"] == "C", 1, 0
+)
+df_behavioral["purchase_adaptation_30"] = np.where(
+    df_behavioral["purchase_adaptation_30"] == "P", 1, 0
+)
+
 # %%
+
+df_knowledge_1 = knowledge.create_knowledge_dataframe(con_exp_1)
+df_econ_preferences_1 = econ_preferences.create_econ_preferences_dataframe(con_exp_1)
+
+# * Only keep day 1 knowledge measures from Experiment 1 (since they were repeated post-intervention)
+df_knowledge_1 = df_knowledge_1[df_knowledge_1["participant.day"] < 3]
+df_knowledge_1[["participant.round", "exp"]] = 1
+df_knowledge_1 = df_knowledge_1.drop(columns="participant.day")
+
+df_econ_preferences_1[["participant.round", "exp"]] = 1
+df_econ_preferences_1 = df_econ_preferences_1.drop(columns="participant.day")
+
+df_knowledge_2 = knowledge.create_knowledge_dataframe(con_exp_2)
+df_econ_preferences_2 = econ_preferences.create_econ_preferences_dataframe(con_exp_2)
+df_knowledge_2[["exp"]] = 2
+df_econ_preferences_2[["exp"]] = 2
+
+# %%
+df_knowledge_all = pd.concat([df_knowledge_1, df_knowledge_2]).reset_index()
+df_knowledge_all = df_knowledge_all.drop(columns="index")
+df_econ_preferences_all = pd.concat(
+    [df_econ_preferences_1, df_econ_preferences_2]
+).reset_index()
+df_econ_preferences_all = df_econ_preferences_all.drop(columns="index")
+
+# %%
+df_behavioral = combine_series(
+    [df_behavioral, df_knowledge_all, df_econ_preferences_all],
+    how="left",
+    on=["participant.label", "participant.round", "exp"],
+)
+assert df_behavioral.shape[1] == 76
+
+# %%
+df_behavioral["n_switches"] = df_behavioral[
+    ["lossAversion_switches", "riskPreferences_switches", "timePreferences_switches"]
+].sum(axis=1)
+
+# %%
+df_corr = create_dynamic_correlation_matrix(
+    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
+    p_values=[0.1, 0.05, 0.01],
+    include_stars=True,
+    display=False,
+    decimal_places=2,
+    mask_upper_triangle=True,
+)
+df_corr[df_corr.index.isin(CORRELATION_COLS[6:])][CORRELATION_COLS[:6]]

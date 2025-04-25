@@ -5,6 +5,7 @@ from typing import Any, Type
 
 from pathlib import Path
 
+import duckdb
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, pointbiserialr, mannwhitneyu, ttest_ind
@@ -23,8 +24,8 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# * Output settings
-pd.set_option("display.max_rows", None, "display.max_columns", None)
+DATABASE_FILE_1 = Path(__file__).parents[1] / "data" / constants.EXP_1_DATABASE
+
 
 # * Define `decision quantity` measure
 DECISION_QUANTITY = "cum_decision"
@@ -60,6 +61,107 @@ def apply_statistical_test(
         return mannwhitneyu(a, b, **kwargs)
     if test == "ttest":
         return ttest_ind(a, b, **kwargs)
+
+
+def create_dynamic_correlation_matrix(
+    data: pd.DataFrame,
+    p_values: list[float],
+    include_stars: bool = True,
+    display: bool = False,
+    decimal_places: int = 2,
+    mask_upper_triangle: bool = True,
+) -> pd.DataFrame:
+    """Calculate appropriate correlation (Pearson or Point-Biserial) and p-values
+    based on variable types and add asterisks to relevant values in table.
+
+    For pairs of variables:
+    - Continuous vs Continuous: Uses Pearson correlation
+    - Binary vs Continuous: Uses Point-Biserial correlation (which is mathematically
+      equivalent to Pearson correlation but conceptually different)
+    - Binary vs Binary: Uses Pearson correlation (equivalent to phi coefficient)
+
+    Args:
+        data (pd.DataFrame): Data to correlate
+        p_values (List[float]): p value thresholds for stars
+        include_stars (bool, optional): Include star for p values. Defaults to True.
+        display (bool, optional): Display p values for each correlation. Defaults to False.
+        decimal_places (int, optional): Decimal places to include. Defaults to 2.
+        mask_upper_triangle (bool, optional): Mask upper triangle including diagonal. Defaults to True.
+
+    Returns:
+        pd.DataFrame: Correlation matrix with appropriate correlation methods and p value stars
+    """
+
+    # Identify binary columns (columns with only 0s and 1s)
+    binary_cols = []
+    for col in data.columns:
+        unique_vals = data[col].unique()
+        if len(unique_vals) <= 2 and set(unique_vals).issubset({0, 1}):
+            binary_cols.append(col)
+    logger.debug("binary cols: %s", binary_cols)
+
+    # Initialize empty correlation and p-value matrices
+    cols = data.columns
+    n = len(cols)
+    rho = pd.DataFrame(np.zeros((n, n)), columns=cols, index=cols)
+    pval = pd.DataFrame(np.zeros((n, n)), columns=cols, index=cols)
+
+    # Fill matrices with appropriate correlation values
+    for i, col1 in enumerate(cols):
+        for j, col2 in enumerate(cols):
+            # Diagonal is always 1 with p-value 0
+            if i == j:
+                rho.iloc[i, j] = 1.0
+                pval.iloc[i, j] = 0.0
+                continue
+
+            # Skip computations for the lower triangle (will be filled later)
+            if i > j:
+                continue
+
+            # Choose correlation method based on variable types
+            x = data[col1].values
+            y = data[col2].values
+
+            if col1 in binary_cols and col2 not in binary_cols:
+                # Point-biserial for binary vs continuous
+                r, p = pointbiserialr(x, y)
+            elif col1 not in binary_cols and col2 in binary_cols:
+                # Point-biserial for continuous vs binary
+                r, p = pointbiserialr(y, x)
+            else:
+                # Pearson for continuous vs continuous or binary vs binary
+                r, p = pearsonr(x, y)
+
+            # Fill both upper and lower triangles
+            rho.iloc[i, j] = r
+            rho.iloc[j, i] = r
+            pval.iloc[i, j] = p
+            pval.iloc[j, i] = p
+
+    if display:
+        print(f"P-values benchmarks: {p_values}")
+        print(f"Binary columns detected: {binary_cols}")
+        for c in cols:
+            print(c)
+            print(f"{c} p-values: \n{pval[c]}")
+
+    if include_stars:
+        p = pval.applymap(
+            lambda x: "" if np.isnan(x) else "".join(["*" for t in p_values if x <= t])
+        )
+        result = rho.round(decimal_places).astype(str).replace("nan", "")
+        result = result + p
+    else:
+        result = rho.round(decimal_places)
+
+    # Apply mask to upper triangle including diagonal if requested
+    if mask_upper_triangle:
+        mask = np.zeros_like(result, dtype=bool)
+        mask[np.triu_indices_from(mask)] = True
+        result = result.mask(mask, "")
+
+    return result
 
 
 def create_pearson_correlation_matrix(
@@ -266,7 +368,8 @@ def run_treatment_forward_selection(
 
 def main() -> None:
     """Run script"""
-    df_results = calculate_opportunity_costs(con)
+    con = duckdb.connect(DATABASE_FILE_1, read_only=False)
+    df_results = calculate_opportunity_costs(con, experiment=1)
     logger.debug(df_results.shape)
 
     df_results = purchase_discontinuity(
@@ -274,8 +377,8 @@ def main() -> None:
     )
 
     # * Forward selection
-    df_knowledge = knowledge.create_knowledge_dataframe()
-    df_econ_preferences = econ_preferences.create_econ_preferences_dataframe()
+    df_knowledge = knowledge.create_knowledge_dataframe(con)
+    df_econ_preferences = econ_preferences.create_econ_preferences_dataframe(con)
     df_individual_char = combine_series(
         [df_results, df_knowledge, df_econ_preferences],
         how="left",
@@ -300,26 +403,15 @@ def main() -> None:
         ].head()
     )
 
-    model = run_forward_selection(
-        data=data[
-            [
-                "sreal",
-                "financial_literacy",
-                "numeracy",
-                "compound",
-                "wisconsin_choice_count",
-                "riskPreferences_choice_count",
-            ]
-        ],
-        response="sreal",
-        categoricals=["financial_literacy", "numeracy", "compound"],
-    )
-    print(model.summary())
+    # data[["financial_literacy", "numeracy", "compound"]] = pd.Categorical(
+    #     data[["financial_literacy", "numeracy", "compound"]]
+    # )
 
-    model = run_treatment_forward_selection(
-        data=data[
+    # logger.debug("dtypes: %s", data.dtypes)
+
+    df_corr = create_dynamic_correlation_matrix(
+        data[
             [
-                "treatment",
                 "sreal",
                 "financial_literacy",
                 "numeracy",
@@ -328,10 +420,43 @@ def main() -> None:
                 "riskPreferences_choice_count",
             ]
         ],
-        response="sreal",
-        categoricals=["financial_literacy", "numeracy", "compound"],
+        [0.1, 0.05, 0.01],
+        display=True,
     )
-    print(model.summary())
+    print(df_corr)
+
+    # model = run_forward_selection(
+    #     data=data[
+    #         [
+    #             "sreal",
+    #             "financial_literacy",
+    #             "numeracy",
+    #             "compound",
+    #             "wisconsin_choice_count",
+    #             "riskPreferences_choice_count",
+    #         ]
+    #     ],
+    #     response="sreal",
+    #     categoricals=["financial_literacy", "numeracy", "compound"],
+    # )
+    # print(model.summary())
+
+    # model = run_treatment_forward_selection(
+    #     data=data[
+    #         [
+    #             "treatment",
+    #             "sreal",
+    #             "financial_literacy",
+    #             "numeracy",
+    #             "compound",
+    #             "wisconsin_choice_count",
+    #             "riskPreferences_choice_count",
+    #         ]
+    #     ],
+    #     response="sreal",
+    #     categoricals=["financial_literacy", "numeracy", "compound"],
+    # )
+    # print(model.summary())
 
 
 if __name__ == "__main__":

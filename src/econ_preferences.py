@@ -8,13 +8,14 @@ import pandas as pd
 
 from src.utils import constants
 from src.utils import helpers
-from src.utils.constants import EXP_2_DATABASE
+from src.utils.constants import EXP_1_DATABASE, EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
+DATABASE_FILE_1 = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
+DATABASE_FILE_2 = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 
 
 def count_preference_choices(data: pd.DataFrame, econ_preference: str) -> pd.Series:
@@ -110,7 +111,9 @@ def count_wisconsin_errors(
     return _data["n_error"]
 
 
-def create_econ_preferences_dataframe() -> pd.DataFrame:
+def create_econ_preferences_dataframe(
+    db_connection: duckdb.DuckDBPyConnection, include_wisconsin_errors: bool = False
+) -> pd.DataFrame:
     """Generate DataFrame with economic preference ("lossAversion", number of coins
     tossed; "riskPreferences", number safe lotteries chosen; "timePreferences",
     number of smaller-sooner payments chosen; "wisconsin", number of correct choices
@@ -123,30 +126,48 @@ def create_econ_preferences_dataframe() -> pd.DataFrame:
         "lossAversion_switches", "riskPreferences_switches",
         "timePreferences_switches", "wisconsin_PE", "wisconsin_SE"]
     """
-    con = duckdb.connect(DATABASE_FILE, read_only=False)
-    if table_exists(con, "lossAversion") == False:
-        create_duckdb_database(con, initial_creation=True)
+    if table_exists(db_connection, "lossAversion") == False:
+        create_duckdb_database(db_connection, initial_creation=True)
     dataframes = []
     for pref in ["lossAversion", "riskPreferences", "timePreferences", "wisconsin"]:
-        _df = con.sql(f"SELECT * FROM {pref}").df()
+        _df = db_connection.sql(f"SELECT * FROM {pref}").df()
+
+        # * Check if experiment 1 or 2 to include day or round column respectively
+        if "participant.day" in _df.columns:
+            round_column = "participant.day"
+        else:
+            round_column = "participant.round"
+            _df[round_column] = 1
+
         _df[f"{pref}_choice_count"] = count_preference_choices(_df, pref)
         if pref != "wisconsin":
             _df[f"{pref}_switches"] = count_switches(_df, pref)
             dataframes.append(
-                _df[["participant.label", f"{pref}_choice_count", f"{pref}_switches"]]
+                _df[
+                    [
+                        "participant.label",
+                        f"{pref}_choice_count",
+                        f"{pref}_switches",
+                    ]
+                ]
             )
-        else:
+        elif pref == "wisconsin" and include_wisconsin_errors:
             _df["wisconsin_PE"] = count_wisconsin_errors(_df, "perseverative")
             _df["wisconsin_SE"] = count_wisconsin_errors(_df, "set-loss")
             dataframes.append(
                 _df[
                     [
                         "participant.label",
+                        round_column,
                         f"{pref}_choice_count",
                         "wisconsin_PE",
                         "wisconsin_SE",
                     ]
                 ]
+            )
+        else:
+            dataframes.append(
+                _df[["participant.label", round_column, f"{pref}_choice_count"]]
             )
     return helpers.combine_series(
         dataframes=dataframes, how="left", on="participant.label"
@@ -155,8 +176,15 @@ def create_econ_preferences_dataframe() -> pd.DataFrame:
 
 def main() -> None:
     """Run script"""
-    df = create_econ_preferences_dataframe()
+    con = duckdb.connect(DATABASE_FILE_1, read_only=False)
+    df = create_econ_preferences_dataframe(con)
     logger.debug(df.shape)
+    logger.debug(df.columns.to_list())
+
+    con = duckdb.connect(DATABASE_FILE_2, read_only=False)
+    df = create_econ_preferences_dataframe(con)
+    logger.debug(df.shape)
+    logger.debug(df.columns.to_list())
 
 
 if __name__ == "__main__":
