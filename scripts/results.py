@@ -18,6 +18,7 @@ from src import (
     calc_opp_costs,
     decision_patterns,
     econ_preferences,
+    intervention,
     knowledge,
     process_survey,
 )
@@ -197,12 +198,7 @@ new_cols = {
     "early_%": "Over-stocking (%)",
     "excess_%": "Wasteful-stocking (%)",
 }
-df_decisions_all = pd.concat(
-    [
-        df_decisions_1[(df_decisions_1["participant.round"] == 1)],
-        df_decisions_2[(df_decisions_2["participant.round"] == 1)],
-    ]
-).reset_index()
+df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
 logger.debug("df_decisions_all.shape: %s"), df_decisions_all.shape
 
@@ -369,7 +365,9 @@ summary
 #### Qualitative pattern
 summary = (
     df_decisions_all[
-        (df_decisions_all["Month"] == 120) & (df_decisions_all["exp"] == 2)
+        (df_decisions_all["Month"] == 120)
+        & (df_decisions_all["exp"] == 2)
+        & (df_decisions_all["participant.day"] == 1)
     ]
     .groupby(["decision_pattern_30_qualitative_perception_accuracy"])[cols]
     .describe()[[(c, "count") if c == "Month" else (c, "mean") for c in cols]]
@@ -378,7 +376,9 @@ summary = (
 
 # For overall performance, bottom row
 summary_all = df_decisions_all[
-    (df_decisions_all["Month"] == 120) & (df_decisions_all["exp"] == 2)
+    (df_decisions_all["Month"] == 120)
+    & (df_decisions_all["exp"] == 2)
+    & (df_decisions_all["participant.day"] == 1)
 ].describe()
 summary_all = summary_all[summary_all.index == "mean"]
 summary_all = summary_all.rename(columns=new_cols)
@@ -398,15 +398,11 @@ summary.loc[len(summary)] = [
 
 summary
 
-# %% [markdown]
-## Behavioral measures
-df_behavioral = df_decisions_all[
-    (df_decisions_all["participant.day"] == 1)
-    & (df_decisions_all["participant.inflation"] == 430)
-]
-
-df_behavioral = decision_patterns.classify_subject_decision_patterns(
-    data=df_behavioral,
+# %%
+# TODO fix: droping JKmBvh7
+# ! FIXXXXXXXX
+df_decisions_all = decision_patterns.classify_subject_decision_patterns(
+    data=df_decisions_all,
     estimate_measure="Quant Perception",
     decision_measure="finalStock",
     month=12,
@@ -414,20 +410,27 @@ df_behavioral = decision_patterns.classify_subject_decision_patterns(
     threshold_estimate=ANNUAL_INTEREST_RATE,
 )
 
+# %%
+
 # * Remove perception accuracy to only compare coherent decisions
-df_behavioral["Quant Perception_pattern_12"] = df_behavioral[
+df_decisions_all["Quant Perception_pattern_12"] = df_decisions_all[
     "Quant Perception_pattern_12"
 ].str[1]
 
 # * Set both purchase adapations as binary variables
-df_behavioral["Quant Perception_pattern_12"] = np.where(
-    df_behavioral["Quant Perception_pattern_12"] == "C", 1, 0
+df_decisions_all["Quant Perception_pattern_12"] = np.where(
+    df_decisions_all["Quant Perception_pattern_12"] == "C", 1, 0
 )
-df_behavioral["purchase_adaptation_30"] = np.where(
-    df_behavioral["purchase_adaptation_30"] == "P", 1, 0
+df_decisions_all["purchase_adaptation_30"] = np.where(
+    df_decisions_all["purchase_adaptation_30"] == "P", 1, 0
 )
 
-# %%
+# %% [markdown]
+## Behavioral measures
+df_behavioral = df_decisions_all[
+    (df_decisions_all["participant.day"] == 1)
+    & (df_decisions_all["participant.inflation"] == 430)
+]
 
 df_knowledge_1 = knowledge.create_knowledge_dataframe(con_exp_1)
 df_econ_preferences_1 = econ_preferences.create_econ_preferences_dataframe(con_exp_1)
@@ -476,3 +479,54 @@ df_corr = create_dynamic_correlation_matrix(
     mask_upper_triangle=True,
 )
 df_corr[df_corr.index.isin(CORRELATION_COLS[6:])][CORRELATION_COLS[:6]]
+
+# %% [markdown]
+## Learning effect
+df_learn = df_decisions_all[
+    (df_decisions_all["treatment"].isin(["control", "Control"]))
+    & (df_decisions_all["participant.inflation"] == 430)
+    & (df_decisions_all["Month"] == 120)
+]
+
+learning_effect, _ = intervention.create_learning_effect_table(
+    df_learn,
+    [
+        "sreal_%",
+        "early_%",
+        "excess_%",
+        "Perception_sensitivity",
+        "purchase_adaptation_30",
+        "Quant Perception_pattern_12",
+    ],
+    p_value_threshold=[0.1, 0.05, 0.01],
+)
+# learning_effect = learning_effect.rename(columns={'':'Measure'})
+learning_effect = learning_effect.set_index("")
+learning_effect
+
+# %% [markdown]
+## Treatment effect
+df_treat = df_decisions_all[
+    (df_decisions_all["participant.inflation"] == 430)
+    & (df_decisions_all["Month"] == 120)
+]
+df_treat["treatment"] = np.where(
+    df_treat["treatment"] == "control", "Control", df_treat["treatment"]
+)
+df_treat["treatment"] = np.where(
+    df_treat["treatment"] == "intervention", "Intervention", df_treat["treatment"]
+)
+treatment_effect = intervention.create_diff_in_diff_table(
+    df_treat,
+    [
+        "sreal_%",
+        "early_%",
+        "excess_%",
+        "Perception_sensitivity",
+        "purchase_adaptation_30",
+        "Quant Perception_pattern_12",
+    ],
+    treatments=["Intervention", "Intervention 1", "Intervention 2"],
+    p_value_threshold=[0.1, 0.05, 0.01],
+)
+treatment_effect
