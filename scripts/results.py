@@ -500,7 +500,6 @@ learning_effect, _ = intervention.create_learning_effect_table(
     ],
     p_value_threshold=[0.1, 0.05, 0.01],
 )
-# learning_effect = learning_effect.rename(columns={'':'Measure'})
 learning_effect = learning_effect.set_index("")
 learning_effect
 
@@ -510,12 +509,24 @@ df_treat = df_decisions_all[
     (df_decisions_all["participant.inflation"] == 430)
     & (df_decisions_all["Month"] == 120)
 ]
-df_treat["treatment"] = np.where(
-    df_treat["treatment"] == "control", "Control", df_treat["treatment"]
+
+# * Drop participant who somehow did not have Quant Expectation in round 1
+df_treat = df_treat[df_treat["participant.label"] != "JKmBvh7"]
+
+treatments_rename = {
+    "control": "Control",
+    "Control": "Control",
+    "intervention": "Intervention (Exp 1)",
+    "Intervention 1": "Intervention 1 (Exp 2)",
+    "Intervention 2": "Intervention 2 (Exp 2)",
+}
+
+df_treat["treatment"] = np.select(
+    condlist=[df_treat["treatment"] == k for k in treatments_rename.keys()],
+    choicelist=[v for v in treatments_rename.values()],
+    default="",
 )
-df_treat["treatment"] = np.where(
-    df_treat["treatment"] == "intervention", "Intervention", df_treat["treatment"]
-)
+
 treatment_effect = intervention.create_diff_in_diff_table(
     df_treat,
     [
@@ -526,7 +537,13 @@ treatment_effect = intervention.create_diff_in_diff_table(
         "purchase_adaptation_30",
         "Quant Perception_pattern_12",
     ],
-    treatments=["Intervention", "Intervention 1", "Intervention 2"],
+    treatments=[
+        "Intervention (Exp 1)",
+        "Intervention 1 (Exp 2)",
+        "Intervention 2 (Exp 2)",
+        "Control",
+    ],
     p_value_threshold=[0.1, 0.05, 0.01],
 )
+treatment_effect = treatment_effect.set_index("")
 treatment_effect

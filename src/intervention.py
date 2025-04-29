@@ -100,14 +100,6 @@ def create_learning_effect_table(
         diff = str(round(after - before, decimal_places))
         for pval in p_value_threshold:
             diff += "*" if p_value <= pval else ""
-        logger.debug(
-            "measure: %s, after: %s, before: %s, diff: %s, pval: %s",
-            m,
-            after,
-            before,
-            diff,
-            p_value,
-        )
         dict_for_dataframe["Session 1"].append(before)
         dict_for_dataframe["Session 2"].append(after)
         dict_for_dataframe["Change in performance"].append(diff)
@@ -179,15 +171,6 @@ def create_diff_in_diff_table(
             diff = str(round(after - before, decimal_places))
             for pval in p_value_threshold:
                 diff += "*" if p_value <= pval else ""
-            logger.debug(
-                "measure: %s, treatment: %s, after: %s, before: %s, diff: %s, pval: %s",
-                m,
-                treat,
-                after,
-                before,
-                diff,
-                p_value,
-            )
             dict_for_dataframe[treat].append(diff)
 
             ## Add standard deviation
