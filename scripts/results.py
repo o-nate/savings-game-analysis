@@ -191,6 +191,7 @@ cols = [
     "excess_%",
     "Perception_sensitivity",
     "Mean Perception Bias",
+    "Expectation_sensitivity",
     "Mean Expectation Bias",
 ]
 new_cols = {
@@ -225,6 +226,7 @@ summary = summary.rename(
         | {
             "Perception_sensitivity": "Perception Sensitivity",
             "Mean Perception Bias": "Perception Bias",
+            "Expectation_sensitivity": "Expectation Sensitivity",
             "Mean Expectation Bias": "Expectation Bias",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
