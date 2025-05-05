@@ -200,7 +200,7 @@ new_cols = {
 }
 df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
-logger.debug("df_decisions_all.shape: %s"), df_decisions_all.shape
+logger.debug("df_decisions_all.shape: %s", df_decisions_all.shape)
 
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
@@ -210,9 +210,9 @@ df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
 
 summary = (
     df_decisions_all[
-        (df_decisions_all["Month"] == 120) & (df_decisions_all["participant.day"] == 1)
+        (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation"])[cols]
+    .groupby(["exp", "participant.inflation", "participant.day"])[cols]
     .describe()[[(c, "mean") for c in cols]]
     .reset_index()
 )
@@ -228,14 +228,16 @@ summary = summary.rename(
             "Mean Expectation Bias": "Expectation Bias",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
+            "participant.day": "Day",
         }
     }
 )
 summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
 summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
+summary["Day"] = summary["Day"].astype(int)
 
-summary.groupby(["Experiment", "Inflation"]).describe()[
-    [(c, "mean") for c in summary.columns[2:]]
+summary.groupby(["Experiment", "Inflation", "Day"]).describe()[
+    [(c, "mean") for c in summary.columns[3:]]
 ]
 
 # %% [markdown]
