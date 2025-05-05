@@ -250,6 +250,7 @@ for measure in [
     "excess_%",
     "Perception_sensitivity",
     "Mean Perception Bias",
+    "Expectation_sensitivity",
     "Mean Expectation Bias",
 ]:
     result = apply_statistical_test(
