@@ -334,7 +334,7 @@ new_cols = {
 summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120)
-        & (df_decisions_all["participant.day"] == 1)
+        & (df_decisions_all["phase"] == "pre")
         & (df_decisions_all["participant.inflation"] == 430)
     ]
     .groupby(["decision_pattern_30_perception_accuracy"])[cols]
@@ -345,7 +345,7 @@ summary = (
 # For overall performance, bottom row
 summary_all = df_decisions_all[
     (df_decisions_all["Month"] == 120)
-    & (df_decisions_all["participant.day"] == 1)
+    & (df_decisions_all["phase"] == "pre")
     & (df_decisions_all["participant.inflation"] == 430)
 ].describe()
 summary_all = summary_all[summary_all.index == "mean"]
@@ -372,7 +372,7 @@ summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120)
         & (df_decisions_all["exp"] == 2)
-        & (df_decisions_all["participant.day"] == 1)
+        & (df_decisions_all["phase"] == "pre")
     ]
     .groupby(["decision_pattern_30_qualitative_perception_accuracy"])[cols]
     .describe()[[(c, "count") if c == "Month" else (c, "mean") for c in cols]]
@@ -383,7 +383,7 @@ summary = (
 summary_all = df_decisions_all[
     (df_decisions_all["Month"] == 120)
     & (df_decisions_all["exp"] == 2)
-    & (df_decisions_all["participant.day"] == 1)
+    & (df_decisions_all["phase"] == "pre")
 ].describe()
 summary_all = summary_all[summary_all.index == "mean"]
 summary_all = summary_all.rename(columns=new_cols)
@@ -404,8 +404,6 @@ summary.loc[len(summary)] = [
 summary
 
 # %%
-# TODO fix: droping JKmBvh7
-# ! FIXXXXXXXX
 df_decisions_all = decision_patterns.classify_subject_decision_patterns(
     data=df_decisions_all,
     estimate_measure="Quant Perception",
@@ -416,7 +414,6 @@ df_decisions_all = decision_patterns.classify_subject_decision_patterns(
 )
 
 # %%
-
 # * Remove perception accuracy to only compare coherent decisions
 df_decisions_all["Quant Perception_pattern_12"] = df_decisions_all[
     "Quant Perception_pattern_12"
@@ -433,7 +430,7 @@ df_decisions_all["purchase_adaptation_30"] = np.where(
 # %% [markdown]
 ## Behavioral measures
 df_behavioral = df_decisions_all[
-    (df_decisions_all["participant.day"] == 1)
+    (df_decisions_all["phase"] >= "pre")
     & (df_decisions_all["participant.inflation"] == 430)
 ]
 
@@ -479,9 +476,9 @@ df_corr = create_dynamic_correlation_matrix(
     df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
     p_values=[0.1, 0.05, 0.01],
     include_stars=True,
-    display=False,
+    display=True,
     decimal_places=2,
-    mask_upper_triangle=True,
+    # mask_upper_triangle=True,
 )
 df_corr[df_corr.index.isin(CORRELATION_COLS[6:])][CORRELATION_COLS[:6]]
 
