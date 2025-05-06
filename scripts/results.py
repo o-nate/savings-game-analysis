@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from pingouin import mediation_analysis
 import seaborn as sns
+
+# from sklearn.preprocessing import OneHotEncoder
 import statsmodels.formula.api as smf
 from statsmodels.iolib.summary2 import summary_col
 
@@ -103,6 +105,13 @@ TREATMENT_GROUPS = [
     "Intervention (Exp 1)",
     "Intervention 1 (Exp 2)",
     "Intervention 2 (Exp 2)",
+]
+
+LOGIT_COLS = [
+    "decision_pattern_30_perception_accuracy_AN",
+    "decision_pattern_30_perception_accuracy_AP",
+    "decision_pattern_30_perception_accuracy_IN",
+    "decision_pattern_30_perception_accuracy_IP",
 ]
 
 # %%
@@ -511,11 +520,79 @@ df_corr = create_dynamic_correlation_matrix(
     df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
     p_values=[0.1, 0.05, 0.01],
     include_stars=True,
-    display=True,
+    display=False,
     decimal_places=2,
     # mask_upper_triangle=True,
 )
 df_corr[df_corr.index.isin(CORRELATION_COLS[6:])][CORRELATION_COLS[:6]]
+
+# %% [markdown]
+## OLS/Logistic regression of performance and decision patterns on behavioral variables
+df_regress = pd.get_dummies(
+    df_behavioral,
+    columns=["decision_pattern_30_perception_accuracy"],
+    drop_first=False,
+    dtype=int,
+)
+
+
+# %%
+df_regress = df_regress.rename(
+    columns={"sreal_%": "sreal_percent"},
+)
+
+
+# %%
+regressions = {}
+# Store pseudo R-squared values for logistic regressions
+pseudo_rsquared = {}
+
+for m in ["sreal_percent"] + LOGIT_COLS:
+    formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
+                + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
+                    + timePreferences_choice_count"""
+    if m in LOGIT_COLS:
+        model = smf.logit(
+            formula=formula,
+            data=df_regress[
+                (df_regress["phase"] == "pre") & (df_regress["Month"] == 120)
+            ],
+        )
+        fit = model.fit()
+        regressions[m] = fit
+        # Store the pseudo R-squared value
+        pseudo_rsquared[m] = fit.prsquared
+    else:
+        model = smf.ols(
+            formula=formula,
+            data=df_regress[
+                (df_regress["phase"] == "pre") & (df_regress["Month"] == 120)
+            ],
+        )
+        regressions[m] = model.fit()
+
+# Create the initial summary table
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+
+# Add pseudo R-squared values for logistic models
+if pseudo_rsquared:
+    # Create a DataFrame with pseudo R-squared values
+    pseudo_r_df = pd.DataFrame(
+        {k: [f"{v:.4f}"] for k, v in pseudo_rsquared.items()},
+        index=["Pseudo R-squared"],
+    )
+
+    # Add to Summary object
+    results.tables.append(pseudo_r_df)
+    results.settings.append(
+        {"index": True, "header": True, "float_format": "%.4f", "align": "r"}
+    )
+
+results
 
 # %% [markdown]
 ## Learning effect
