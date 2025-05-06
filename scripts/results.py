@@ -419,7 +419,6 @@ df_decisions_all = decision_patterns.classify_subject_decision_patterns(
     threshold_estimate=ANNUAL_INTEREST_RATE,
 )
 
-# %%
 # * Remove perception accuracy to only compare coherent decisions
 df_decisions_all["Quant Perception_pattern_12"] = df_decisions_all[
     "Quant Perception_pattern_12"
@@ -432,6 +431,36 @@ df_decisions_all["Quant Perception_pattern_12"] = np.where(
 df_decisions_all["purchase_adaptation_30"] = np.where(
     df_decisions_all["purchase_adaptation_30"] == "P", 1, 0
 )
+
+# %% [markdown]
+## OLS regressions: Overall performance measures on inflation measures
+df_regress = df_decisions_all[(df_decisions_all["participant.inflation"] == 430)]
+df_regress = df_regress.rename(
+    columns={
+        "Mean Perception Bias": "avg_perception_bias",
+        "Mean Expectation Bias": "avg_expectation_bias",
+        "sreal_%": "sreal_percent",
+        "early_%": "early_percent",
+        "excess_%": "excess_percent",
+    },
+)
+
+# %%
+regressions = {}
+
+for m in ["sreal_percent", "early_percent", "excess_percent"]:
+    model = smf.ols(
+        formula=f"""{m} ~ Expectation_sensitivity + avg_expectation_bias\
+            + Perception_sensitivity + avg_perception_bias""",
+        data=df_regress[(df_regress["phase"] == "pre") & (df_regress["Month"] == 120)],
+    )
+    regressions[m] = model.fit()
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+results
 
 # %% [markdown]
 ## Behavioral measures
