@@ -544,8 +544,6 @@ df_regress = df_regress.rename(
 
 # %%
 regressions = {}
-# Store pseudo R-squared values for logistic regressions
-pseudo_rsquared = {}
 
 for m in ["sreal_percent"] + LOGIT_COLS:
     formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
@@ -558,10 +556,6 @@ for m in ["sreal_percent"] + LOGIT_COLS:
                 (df_regress["phase"] == "pre") & (df_regress["Month"] == 120)
             ],
         )
-        fit = model.fit()
-        regressions[m] = fit
-        # Store the pseudo R-squared value
-        pseudo_rsquared[m] = fit.prsquared
     else:
         model = smf.ols(
             formula=formula,
@@ -569,28 +563,22 @@ for m in ["sreal_percent"] + LOGIT_COLS:
                 (df_regress["phase"] == "pre") & (df_regress["Month"] == 120)
             ],
         )
-        regressions[m] = model.fit()
+    regressions[m] = model.fit()
 
-# Create the initial summary table
+# Define custom info_dict to show Pseudo R-squared for logistic models
+info_dict = {
+    "Pseudo R-squared": lambda x: (
+        "%#8.3f" % x.prsquared if hasattr(x, "prsquared") else ""
+    ),
+}
+
+# Create the summary table with the info_dict parameter
 results = summary_col(
     results=list(regressions.values()),
     stars=True,
     model_names=list(regressions.keys()),
+    info_dict=info_dict,
 )
-
-# Add pseudo R-squared values for logistic models
-if pseudo_rsquared:
-    # Create a DataFrame with pseudo R-squared values
-    pseudo_r_df = pd.DataFrame(
-        {k: [f"{v:.4f}"] for k, v in pseudo_rsquared.items()},
-        index=["Pseudo R-squared"],
-    )
-
-    # Add to Summary object
-    results.tables.append(pseudo_r_df)
-    results.settings.append(
-        {"index": True, "header": True, "float_format": "%.4f", "align": "r"}
-    )
 
 results
 
