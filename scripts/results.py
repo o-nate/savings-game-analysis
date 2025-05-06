@@ -99,6 +99,12 @@ CORRELATION_COLS = [
     "timePreferences_choice_count",
 ]
 
+TREATMENT_GROUPS = [
+    "Intervention (Exp 1)",
+    "Intervention 1 (Exp 2)",
+    "Intervention 2 (Exp 2)",
+]
+
 # %%
 if not table_exists(con_exp_1, "Questionnaire"):
     create_duckdb_database(con_exp_1, experiment=1, initial_creation=True)
@@ -539,13 +545,11 @@ treatment_effect = intervention.create_diff_in_diff_table(
         "purchase_adaptation_30",
         "Quant Perception_pattern_12",
     ],
-    treatments=[
-        "Intervention (Exp 1)",
-        "Intervention 1 (Exp 2)",
-        "Intervention 2 (Exp 2)",
-        "Control",
-    ],
+    treatments=TREATMENT_GROUPS,
+    control="Control",
     p_value_threshold=[0.1, 0.05, 0.01],
+    decimal_places=4,
 )
 treatment_effect = treatment_effect.set_index("")
+
 treatment_effect
