@@ -216,6 +216,58 @@ df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
 logger.debug("df_decisions_all.shape: %s", df_decisions_all.shape)
 
+# %% [markdown]
+## Savings Game parameters
+fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+
+# Plot savings and stock on first subplot
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[df_decisions_all["participant.inflation"] == 430],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive"],
+    strategy_savings_cols=["soptimal", "snaive"],
+    strategy_names=["Best", "Naïve"],
+    palette="tab10",
+    ax=axs[0],
+    set_ylim=True,
+)
+
+# Add labels
+axs[0].set_xlabel("")
+axs[0].set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
+# Access the existing twin axis
+ax2 = axs[0].get_shared_y_axes().get_siblings(axs[0])[0]
+ax2.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
+
+# Add legend
+axs[0].legend(loc="upper left", fontsize=14)
+axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
+
+# Plot inflation estimates on second subplot
+estimates = ["4x30"]
+df_inf_plot = df_survey.copy()
+df_inf_plot = df_inf_plot.replace("Actual", "4x30")
+df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+sns.lineplot(
+    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Inflation sequence",
+    style="Inflation sequence",
+    ax=axs[1],
+)
+
+# Adjust titles and labels
+axs[1].set_xlabel("Month", labelpad=20, fontsize=14)
+axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=14)
+axs[1].legend(loc="upper left", fontsize=14)
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+## Overall performance
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
         ["Perception_bias", "Expectation_bias"]
@@ -254,6 +306,53 @@ summary["Day"] = summary["Day"].astype(int)
 summary.groupby(["Experiment", "Inflation", "Day"]).describe()[
     [(c, "mean") for c in summary.columns[3:]]
 ]
+
+# %% [markdown]
+### Plots
+fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+
+# Plot savings and stock on first subplot
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[df_decisions_all["participant.inflation"] == 430],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+    strategy_savings_cols=["soptimal", "snaive", "sreal"],
+    strategy_names=["Best", "Naïve", "Average"],
+    palette="tab10",
+    ax=axs[0],
+    set_ylim=True,
+)
+
+# Add labels
+axs[0].set_xlabel("")
+axs[0].set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
+# Access the existing twin axis
+ax2 = axs[0].get_shared_y_axes().get_siblings(axs[0])[0]
+ax2.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
+
+# Add legend
+axs[0].legend(loc="upper left", fontsize=14)
+axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
+
+# Plot inflation estimates on second subplot
+estimates = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
+sns.lineplot(
+    data=df_survey[df_survey["Measure"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Measure",
+    style="Measure",
+    ax=axs[1],
+)
+
+# Adjust titles and labels
+axs[1].set_xlabel("Month", labelpad=20, fontsize=14)
+axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=14)
+axs[1].legend(loc="upper left", fontsize=14)
+
+plt.tight_layout()
+plt.show()
 
 # %% [markdown]
 ## Test difference between experiments
