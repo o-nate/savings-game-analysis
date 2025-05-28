@@ -89,6 +89,7 @@ CORRELATION_COLS = [
     "early_%",
     "excess_%",
     "Perception_sensitivity",
+    "Expectation_sensitivity",
     "purchase_adaptation_30",
     "Quant Perception_pattern_12",
     "financial_literacy",
@@ -145,9 +146,6 @@ df_decisions_1 = df_opp_cost.merge(df_inf_measures, how="left")
 df_decisions_1 = df_decisions_1.merge(
     df_expectations[["participant.code", "participant.day"]], how="left"
 )
-
-# # * Filter for 4x30 inflation only
-# df_decisions_1 = df_decisions_1[df_decisions_1["participant.inflation"] == 430]
 
 # * Store final savings at month t = 120
 df_decisions_1["finalSavings_120"] = (
@@ -524,7 +522,7 @@ df_corr = create_dynamic_correlation_matrix(
     decimal_places=2,
     # mask_upper_triangle=True,
 )
-df_corr[df_corr.index.isin(CORRELATION_COLS[6:])][CORRELATION_COLS[:6]]
+df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
 
 # %% [markdown]
 ## OLS/Logistic regression of performance and decision patterns on behavioral variables
