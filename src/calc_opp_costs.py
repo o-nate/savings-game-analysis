@@ -229,8 +229,11 @@ def plot_savings_and_stock(
         palette=kwargs.get("palette", "tab10"),
     )
 
-    # Drop y-axis labels so that they can be set later
-    ax2.set_ylabel("")
+    # Set y-axis labels with proper positioning
+    ax.set_ylabel("Quantity in stock", labelpad=20, fontsize=kwargs.get("fontsize", 14))
+    ax2.set_ylabel(
+        "Savings balance (₮)", labelpad=20, fontsize=kwargs.get("fontsize", 14)
+    )
 
     # Set y-axis limits for savings only if set_ylim is True
     if set_ylim:

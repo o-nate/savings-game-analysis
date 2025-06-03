@@ -230,17 +230,12 @@ calc_opp_costs.plot_savings_and_stock(
     palette="tab10",
     ax=axs[0],
     set_ylim=True,
+    fontsize=20,
 )
 
-# Add labels
 axs[0].set_xlabel("")
-axs[0].set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
-# Access the existing twin axis
-ax2 = axs[0].get_shared_y_axes().get_siblings(axs[0])[0]
-ax2.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
 
-# Add legend
-axs[0].legend(loc="upper left", fontsize=14)
+axs[0].legend(loc="upper left", fontsize=20)
 axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
 
 # Plot inflation estimates on second subplot
@@ -259,9 +254,9 @@ sns.lineplot(
 )
 
 # Adjust titles and labels
-axs[1].set_xlabel("Month", labelpad=20, fontsize=14)
-axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=14)
-axs[1].legend(loc="upper left", fontsize=14)
+axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
+axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[1].legend(loc="upper left", fontsize=20)
 
 plt.tight_layout()
 plt.show()
@@ -321,17 +316,12 @@ calc_opp_costs.plot_savings_and_stock(
     palette="tab10",
     ax=axs[0],
     set_ylim=True,
+    fontsize=20,
 )
 
-# Add labels
 axs[0].set_xlabel("")
-axs[0].set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
-# Access the existing twin axis
-ax2 = axs[0].get_shared_y_axes().get_siblings(axs[0])[0]
-ax2.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
 
-# Add legend
-axs[0].legend(loc="upper left", fontsize=14)
+axs[0].legend(loc="upper left", fontsize=16)
 axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
 
 # Plot inflation estimates on second subplot
@@ -347,9 +337,9 @@ sns.lineplot(
 )
 
 # Adjust titles and labels
-axs[1].set_xlabel("Month", labelpad=20, fontsize=14)
-axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=14)
-axs[1].legend(loc="upper left", fontsize=14)
+axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
+axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[1].legend(loc="upper left", fontsize=16)
 
 plt.tight_layout()
 plt.show()
@@ -694,6 +684,7 @@ learning_effect, _ = intervention.create_learning_effect_table(
         "early_%",
         "excess_%",
         "Perception_sensitivity",
+        "Expectation_sensitivity",
         "purchase_adaptation_30",
         "Quant Perception_pattern_12",
     ],
@@ -733,6 +724,7 @@ treatment_effect = intervention.create_diff_in_diff_table(
         "early_%",
         "excess_%",
         "Perception_sensitivity",
+        "Expectation_sensitivity",
         "purchase_adaptation_30",
         "Quant Perception_pattern_12",
     ],
