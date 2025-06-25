@@ -40,7 +40,7 @@ from src.utils.constants import (
     QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_36,
 )
 from src.utils.database import create_duckdb_database, table_exists
-from src.utils.helpers import combine_series, export_plot
+from src.utils.helpers import combine_mean_std_dicts, combine_series, export_plot
 from src.utils.plotting import annotate_2d_histogram, create_performance_measures_table
 from utils.logging_config import get_logger
 
@@ -63,6 +63,18 @@ con_exp_2 = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 FILE_PATH = Path(__file__).parents[1] / "results"
 
 # %%
+QUESTIONNAIRE_COLS = [
+    "Questionnaire.1.player.age",
+    "Questionnaire.1.player.gender",
+    "Questionnaire.1.player.educationLevel",
+    "Questionnaire.1.player.employmentStatus",
+    "Questionnaire.1.player.financialStatusIncome",
+    "Questionnaire.1.player.financialStatusSavings_1",
+    "Questionnaire.1.player.financialStatusSavings_2",
+    "Questionnaire.1.player.financialStatusDebt_1",
+    "Questionnaire.1.player.savingsAccounts",
+    "Questionnaire.1.player.retirementAccounts",
+]
 ACCURATE_PERCEPTIONS_THRESHOLD = 0.75
 ACCURATE_QUALITATIVE_THRESHOLD = 3
 COLS = [
@@ -271,8 +283,11 @@ axs[1].legend(loc="upper left", fontsize=20)
 plt.tight_layout()
 plt.show()
 
+
 # %% [markdown]
 ## Overall performance
+
+
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
         ["Perception_bias", "Expectation_bias"]
@@ -285,6 +300,14 @@ summary = (
     ]
     .groupby(["exp", "participant.inflation", "participant.day"])[cols]
     .describe()[[(c, "mean") for c in cols]]
+    .reset_index()
+)
+summary_std = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
+    ]
+    .groupby(["exp", "participant.inflation", "participant.day"])[cols]
+    .describe()[[(c, "std") for c in cols]]
     .reset_index()
 )
 
@@ -308,9 +331,42 @@ summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]
 summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
 summary["Day"] = summary["Day"].astype(int)
 
-summary.groupby(["Experiment", "Inflation", "Day"]).describe()[
-    [(c, "mean") for c in summary.columns[3:]]
-]
+summary_dict = (
+    summary.groupby(["Experiment", "Inflation", "Day"])
+    .describe()[[(c, "mean") for c in summary.columns[3:]]]
+    .to_dict()
+)
+
+summary_std.columns = summary_std.columns.get_level_values(0)
+
+summary_std = summary_std.rename(
+    columns={
+        **new_cols
+        | {
+            "Perception_sensitivity": "Perception Sensitivity",
+            "Mean Perception Bias": "Perception Bias",
+            "Expectation_sensitivity": "Expectation Sensitivity",
+            "Mean Expectation Bias": "Expectation Bias",
+            "participant.inflation": "Inflation",
+            "exp": "Experiment",
+            "participant.day": "Day",
+        }
+    }
+)
+summary_std[[c for c in new_cols.values()]] = (
+    summary_std[[c for c in new_cols.values()]] * 100
+)
+summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10x12")
+summary_std["Day"] = summary_std["Day"].astype(int)
+
+summary_std_dict = (
+    summary_std.groupby(["Experiment", "Inflation", "Day"])
+    .describe()[[(c, "mean") for c in summary_std.columns[3:]]]
+    .to_dict()
+)
+combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
+
+pd.DataFrame(combined_dict).style
 
 # %% [markdown]
 ### Plots
