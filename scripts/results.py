@@ -123,6 +123,11 @@ if not table_exists(con_exp_2, "Questionnaire"):
 
 # %% [markdown]
 ## Experiment 1
+df_questionnaire = con_exp_1.sql("SELECT * FROM Questionnaire").df()
+
+df_questionnaire[QUESTIONNAIRE_COLS].describe()
+
+# %%
 df_expectations = con_exp_1.sql("SELECT * FROM inf_expectation").df()
 df_perceptions = con_exp_1.sql("SELECT * FROM inf_estimate").df()
 
@@ -159,6 +164,11 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
 
 # %% [markdown]
 ## Experiment 2
+df_questionnaire = con_exp_2.sql("SELECT * FROM Questionnaire").df()
+
+df_questionnaire[QUESTIONNAIRE_COLS].describe()
+
+# %%
 df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con_exp_2, experiment=2)
 
 df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
