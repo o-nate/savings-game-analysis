@@ -298,7 +298,7 @@ summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation", "participant.day"])[cols]
+    .groupby(["exp", "participant.inflation"])[cols]
     .describe()[[(c, "mean") for c in cols]]
     .reset_index()
 )
@@ -306,7 +306,7 @@ summary_std = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation", "participant.day"])[cols]
+    .groupby(["exp", "participant.inflation"])[cols]
     .describe()[[(c, "std") for c in cols]]
     .reset_index()
 )
@@ -323,17 +323,17 @@ summary = summary.rename(
             "Mean Expectation Bias": "Expectation Bias",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
-            "participant.day": "Day",
+            # "participant.day": "Day",
         }
     }
 )
 summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
 summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
-summary["Day"] = summary["Day"].astype(int)
+# summary["Day"] = summary["Day"].astype(int)
 
 summary_dict = (
-    summary.groupby(["Experiment", "Inflation", "Day"])
-    .describe()[[(c, "mean") for c in summary.columns[3:]]]
+    summary.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[2:]]]
     .to_dict()
 )
 
@@ -349,7 +349,7 @@ summary_std = summary_std.rename(
             "Mean Expectation Bias": "Expectation Bias",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
-            "participant.day": "Day",
+            # "participant.day": "Day",
         }
     }
 )
@@ -357,11 +357,11 @@ summary_std[[c for c in new_cols.values()]] = (
     summary_std[[c for c in new_cols.values()]] * 100
 )
 summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10x12")
-summary_std["Day"] = summary_std["Day"].astype(int)
+# summary_std["Day"] = summary_std["Day"].astype(int)
 
 summary_std_dict = (
-    summary_std.groupby(["Experiment", "Inflation", "Day"])
-    .describe()[[(c, "mean") for c in summary_std.columns[3:]]]
+    summary_std.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[2:]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)

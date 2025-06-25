@@ -17,10 +17,8 @@ logger = get_logger(__name__)
 def combine_mean_std_dicts(mean_dict, std_dict):
     combined = {}
     for outer_key in mean_dict:
-        print(outer_key)
         combined[outer_key] = {}
         for inner_key in mean_dict[outer_key]:
-            print(inner_key)
             mean_val = mean_dict[outer_key][inner_key]
             std_val = std_dict.get(outer_key, {}).get(inner_key, None)
             if std_val is not None:
