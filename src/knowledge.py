@@ -9,13 +9,14 @@ import numpy as np
 import pandas as pd
 
 from src.utils import helpers
-from src.utils.constants import EXP_2_DATABASE
+from src.utils.constants import EXP_1_DATABASE, EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
+DATABASE_FILE_1 = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
+DATABASE_FILE_2 = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 
 
 def count_correct_responses(data: pd.DataFrame, knowledge_measure: str) -> pd.Series:
@@ -42,26 +43,44 @@ def count_correct_responses(data: pd.DataFrame, knowledge_measure: str) -> pd.Se
     return np.select(_criteria, choices, default=0)
 
 
-def create_knowledge_dataframe() -> pd.DataFrame:
-    con = duckdb.connect(DATABASE_FILE, read_only=False)
+def create_knowledge_dataframe(
+    db_connection: duckdb.DuckDBPyConnection,
+) -> pd.DataFrame:
     dataframes = []
     for i, j in zip(
         ["Finance", "Numeracy", "Inflation"],
         ["financial_literacy", "numeracy", "compound"],
     ):
-        if table_exists(con, i) == False:
-            create_duckdb_database(con, initial_creation=True)
-        _df = con.sql(f"SELECT * FROM {i}").df()
+        if table_exists(db_connection, i) == False:
+            create_duckdb_database(db_connection=db_connection, initial_creation=True)
+        _df = db_connection.sql(f"SELECT * FROM {i}").df()
         _df[j] = count_correct_responses(_df, j)
-        dataframes.append(_df[["participant.label", j]])
-    return helpers.combine_series(dataframes, how="left", on="participant.label")
+
+        # * Check if experiment 1 or 2 to include day or round column respectively
+        if "participant.day" in _df.columns:
+            round_column = "participant.day"
+        else:
+            round_column = "participant.round"
+            _df[round_column] = 1
+
+        dataframes.append(_df[["participant.label", round_column, j]])
+
+    return helpers.combine_series(
+        dataframes, how="left", on=["participant.label", round_column]
+    )
 
 
 def main() -> None:
     """Run script"""
-    df = create_knowledge_dataframe()
-    print(df.head())
-    logger.debug(df[df["participant.label"] == "9xHTKNJ"])
+    con = duckdb.connect(DATABASE_FILE_1, read_only=False)
+    df = create_knowledge_dataframe(con)
+    logger.debug(df.shape)
+    logger.debug(df.columns.to_list())
+
+    con = duckdb.connect(DATABASE_FILE_2, read_only=False)
+    df = create_knowledge_dataframe(con)
+    logger.debug(df.shape)
+    logger.debug(df.columns.to_list())
 
 
 if __name__ == "__main__":

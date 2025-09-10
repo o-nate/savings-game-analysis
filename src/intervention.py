@@ -30,12 +30,10 @@ DECISION_QUANTITY = "cum_decision"
 # * Define purchase window, i.e. how many months before and after inflation phase change to count
 WINDOW = 3
 
-"""Print comparison of performance before and after intervention with p values"""
-
 
 def calculate_change_in_measure(
     data: pd.DataFrame, measure_impacted: str, display_results: bool = False
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """Calculate change in performance measure
 
     Args:
@@ -61,11 +59,39 @@ def calculate_change_in_measure(
     return before.mean(), after.mean(), p_value
 
 
+def calculate_diff_in_diff_of_measure(
+    data: pd.DataFrame,
+    measure_impacted: str,
+    treatment: str,
+    control: str,
+    display_results: bool = False,
+) -> tuple[pd.Series, pd.Series, float]:
+    treatment_diff = data[data["treatment"] == treatment][
+        f"Change in {measure_impacted}"
+    ]
+    control_diff = data[data["treatment"] == control][f"Change in {measure_impacted}"]
+
+    # Perform Welch's t test, given unequal sample sizes
+    p_value = stats.ttest_ind(
+        treatment_diff, control_diff, equal_var=False, nan_policy="raise"
+    ).pvalue
+
+    if display_results:
+        print(f"Change in {measure_impacted} for {treatment}:", treatment_diff.mean())
+        print(f"Change in {measure_impacted} for {control}:", control_diff.mean())
+        print(
+            f"Diff in diff of {measure_impacted}: {treatment_diff.mean() - control_diff.mean()}"
+        )
+        print(f"p value for change in {measure_impacted}:\t{p_value}\n")
+    return treatment_diff, control_diff, p_value
+
+
 def create_learning_effect_table(
     data: pd.DataFrame,
     measures: List[str],
     p_value_threshold: List[float],
     decimal_places: int = 2,
+    as_percentage: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Generate table to show the change in performance measures between Savings Game
     rounds.
@@ -96,53 +122,47 @@ def create_learning_effect_table(
         df_pivot[f"Change in {m}"] = df_pivot[(m, "post")] - df_pivot[(m, "pre")]
         before, after, p_value = calculate_change_in_measure(data, m)
 
+        # Apply percentage scaling if needed
+        if as_percentage:
+            before = before * 100
+            after = after * 100
+            diff_value = after - before
+        else:
+            diff_value = after - before
+
         ## Add difference
-        diff = str(round(after - before, decimal_places))
+        diff = str(round(diff_value, decimal_places))
         for pval in p_value_threshold:
             diff += "*" if p_value <= pval else ""
-        logger.debug(
-            "measure: %s, after: %s, before: %s, diff: %s, pval: %s",
-            m,
-            after,
-            before,
-            diff,
-            p_value,
-        )
         dict_for_dataframe["Session 1"].append(before)
         dict_for_dataframe["Session 2"].append(after)
         dict_for_dataframe["Change in performance"].append(diff)
 
         ## Add standard deviation
-        standard_deviation = str(
-            round(
-                df_pivot[(m, "pre")].std(),
-                decimal_places,
-            )
-        )
+        std_pre = df_pivot[(m, "pre")].std()
+        std_post = df_pivot[(m, "post")].std()
+        std_change = df_pivot[f"Change in {m}"].std()
+        if as_percentage:
+            std_pre = std_pre * 100
+            std_post = std_post * 100
+            std_change = std_change * 100
+        standard_deviation = str(round(std_pre, decimal_places))
         dict_for_dataframe["Session 1"].append(f"({standard_deviation})")
-        standard_deviation = str(
-            round(
-                df_pivot[(m, "post")].std(),
-                decimal_places,
-            )
-        )
+        standard_deviation = str(round(std_post, decimal_places))
         dict_for_dataframe["Session 2"].append(f"({standard_deviation})")
-        standard_deviation = str(
-            round(
-                df_pivot[f"Change in {m}"].std(),
-                decimal_places,
-            )
-        )
+        standard_deviation = str(round(std_change, decimal_places))
         dict_for_dataframe["Change in performance"].append(f"({standard_deviation})")
     return pd.DataFrame(dict_for_dataframe), df_pivot
 
 
 def create_diff_in_diff_table(
     data: pd.DataFrame,
-    measures: List[str],
-    treatments: List[str],
-    p_value_threshold: List[float],
+    measures: list[str],
+    treatments: list[str],
+    control: str,
+    p_value_threshold: list[float],
     decimal_places: int = 2,
+    as_percentage: bool = True,
 ) -> pd.DataFrame:
     """Generate table to show difference-in-difference results between treatments
 
@@ -151,9 +171,10 @@ def create_diff_in_diff_table(
         treatment groups, and participant labels
         measures (List[str]): List of measures to calculate change for
         treatments (List[str]): List of treatment group names
+        control (str): Name or list of control group name
         p_value_threshold (List[float]): List of p-values that correspond to stars
         added on results
-        decimal_places (int, optional): Decimal place to round to. Defaults to 2.s
+        decimal_places (int, optional): Decimal place to round to. Defaults to 2.
 
     Returns:
         pd.DataFrame: DataFrame with diff-in-diff results
@@ -167,36 +188,68 @@ def create_diff_in_diff_table(
     df_pivot.reset_index(inplace=True)
     header_column = {"": [m for i in measures for m in [i, "(std)"]]}
     results_columns = {t: [] for t in treatments}
-    dict_for_dataframe = header_column | results_columns
+    control_column = {control: []}
+    diff_columns = {f"Diff {t}": [] for t in treatments}
+    dict_for_dataframe = header_column | results_columns | control_column | diff_columns
+
     for m in measures:
         df_pivot[f"Change in {m}"] = df_pivot[(m, "post")] - df_pivot[(m, "pre")]
+        control_before, control_after, control_p_value = calculate_change_in_measure(
+            data[data["treatment"] == control], m
+        )
+        control_diff_value = control_after - control_before
+        if as_percentage:
+            control_before = control_before * 100
+            control_after = control_after * 100
+            control_diff_value = control_diff_value * 100
+        ## Add difference
+        diff = str(round(control_diff_value, decimal_places))
+        for pval in p_value_threshold:
+            diff += "*" if control_p_value <= pval else ""
+        dict_for_dataframe[control].append(diff)
+        ## Add standard deviation
+        std_control = df_pivot[df_pivot["treatment"] == control][f"Change in {m}"].std()
+        if as_percentage:
+            std_control = std_control * 100
+        standard_deviation = str(round(std_control, decimal_places))
+        dict_for_dataframe[control].append(f"({standard_deviation})")
+
         for treat in treatments:
             before, after, p_value = calculate_change_in_measure(
                 data[data["treatment"] == treat], m
             )
+            treatment_diff, control_diff, diff_p_value = (
+                calculate_diff_in_diff_of_measure(df_pivot, m, treat, control)
+            )
+
+            # Add p-value stars
+            diff_in_diff_value = treatment_diff.mean() - control_diff.mean()
+            if as_percentage:
+                before = before * 100
+                after = after * 100
+                diff_in_diff_value = diff_in_diff_value * 100
+            diff = str(round(diff_in_diff_value, decimal_places))
+            for pval in p_value_threshold:
+                diff += "*" if diff_p_value <= pval else ""
+            dict_for_dataframe[f"Diff {treat}"].append(diff)
+
+            ## Add standard deviation (left blank as in original)
+            dict_for_dataframe[f"Diff {treat}"].append("")
 
             ## Add difference
-            diff = str(round(after - before, decimal_places))
+            diff_value = after - before
+            if as_percentage:
+                diff_value = diff_value
+            diff = str(round(diff_value, decimal_places))
             for pval in p_value_threshold:
                 diff += "*" if p_value <= pval else ""
-            logger.debug(
-                "measure: %s, treatment: %s, after: %s, before: %s, diff: %s, pval: %s",
-                m,
-                treat,
-                after,
-                before,
-                diff,
-                p_value,
-            )
             dict_for_dataframe[treat].append(diff)
 
             ## Add standard deviation
-            standard_deviation = str(
-                round(
-                    df_pivot[df_pivot["treatment"] == treat][f"Change in {m}"].std(),
-                    decimal_places,
-                )
-            )
+            std_treat = df_pivot[df_pivot["treatment"] == treat][f"Change in {m}"].std()
+            if as_percentage:
+                std_treat = std_treat * 100
+            standard_deviation = str(round(std_treat, decimal_places))
             dict_for_dataframe[treat].append(f"({standard_deviation})")
     return pd.DataFrame(dict_for_dataframe)
 
@@ -263,8 +316,7 @@ def main() -> None:
         create_duckdb_database(con, initial_creation=True)
     df_int = con.sql("SELECT * FROM task_int").df()
 
-    df_results = calculate_opportunity_costs(con)
-    logging.debug(df_results.shape)
+    df_results = calculate_opportunity_costs(con, experiment=2)
 
     df_results = purchase_discontinuity(
         df_results, decision_quantity=DECISION_QUANTITY, window=WINDOW
@@ -272,42 +324,36 @@ def main() -> None:
 
     questions = ["intro_1", "q", "confirm"]
     cols = [c for c in df_int.columns if any(q in c for q in questions)]
-    logging.debug(cols)
 
     # TODO Link mistakes participants made to their questions and responses
     # * Compare impact of intervention
     measures = [
-        "finalSavings",
-        "early",
-        "late",
-        "excess",
+        "sreal_%",
+        "early_%",
+        "excess_%",
     ]
 
     data_df = df_results[df_results["month"] == 120].copy()
-    logging.debug(data_df.shape)
     data_df = data_df.merge(df_int[["participant.label", "date"] + cols], how="left")
 
     # * Rename mistakes
     data_df.rename(
         columns={
-            "finalSavings": "Total savings",
-            "early": "Over-stocking",
-            "late": "Under-stocking",
-            "excess": "Wasteful-stocking",
+            "sreal_%": "Total savings",
+            "early_%": "Over-stocking",
+            "excess_%": "Wasteful-stocking",
         },
         inplace=True,
     )
 
-    measures = ["Total savings", "Over-stocking", "Under-stocking", "Wasteful-stocking"]
+    measures = ["Total savings", "Over-stocking", "Wasteful-stocking"]
 
     data_df["convinced"] = data_df[[c for c in data_df.columns if "confirm" in c]].sum(
         axis=1
     )
-    logging.debug([c for c in data_df.columns if "confirm" in c])
-    print(data_df.head())
 
     # * Measure learning effect
-    learning_effect = create_learning_effect_table(
+    learning_effect, _ = create_learning_effect_table(
         data_df,
         measures=measures,
         p_value_threshold=[0.1, 0.05, 0.01],
@@ -319,8 +365,10 @@ def main() -> None:
     diff_results = create_diff_in_diff_table(
         data_df,
         measures=measures,
-        treatments=["Intervention 1", "Intervention 2", "Control"],
+        treatments=["Intervention 1", "Intervention 2"],
+        control="Control",
         p_value_threshold=[0.1, 0.05, 0.01],
+        decimal_places=4,
     )
     print("\ndiff in diff")
     print(diff_results)

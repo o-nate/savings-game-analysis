@@ -20,7 +20,7 @@ from tqdm.auto import tqdm
 from src import preprocess_exp_1
 from src.preprocess import preprocess_data
 from src.utils.constants import (
-    EXP_1_DATABASE,
+    EXP_2_DATABASE,
     INITIAL_ENDOWMENT,
     INTEREST_RATE,
     WAGE,
@@ -33,7 +33,7 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 # * Declare duckdb database info
-DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
+DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
 TABLE_NAME = "strategies"
 
 
@@ -81,7 +81,6 @@ PLOT_MELT_COLS = [
     "participant.label",
     "treatment",
     "phase",
-    "month",
     "participant.inflation",
 ]
 
@@ -147,82 +146,100 @@ def round_price(number, decimal_precision=2):
     return number
 
 
-def plot_savings_and_stock(data: pd.DataFrame, **kwargs) -> None:
+def plot_savings_and_stock(
+    data: pd.DataFrame,
+    month_col: str,
+    strategy_stock_cols: list[str],
+    strategy_savings_cols: list[str],
+    strategy_names: list[str],
+    ax: plt.Axes = None,
+    set_ylim: bool = True,
+    **kwargs,
+) -> plt.Axes:
     """Plot average performance versus optimal and naive strategies
 
     Args:
         data (pd.DataFrame): _description_
+        month_col (str): name of month column
+        strategy_stock_cols (list[str]): list of strategy stock columns
+        strategy_savings_cols (list[str]): list of strategy savings columns
+        strategy_names (list[str]): list of strategy of names to display for each strategy
+        ax (plt.Axes, optional): Axis to plot on. If None, creates a new figure. Defaults to None.
+        set_ylim (bool, optional): Whether to set y-axis limits. Defaults to True.
+
+    Returns:
+        plt.Axes: The axis containing the plot
     """
     ## Convert to time series-esque dataframe for multi-bar plot
+    id_variables = PLOT_MELT_COLS + [month_col]
+    value_variables = ["participant.inflation"] + strategy_stock_cols
     df_stock = data.melt(
-        id_vars=PLOT_MELT_COLS,
+        id_vars=id_variables,
         var_name="Strategy",
-        value_vars=["participant.inflation", "finalStock", "sgoptimal", "sgnaive"],
+        value_vars=value_variables,
         value_name="Stock",
     )
 
+    value_variables = ["participant.inflation"] + strategy_savings_cols
     df_savings = data.melt(
-        id_vars=PLOT_MELT_COLS,
+        id_vars=id_variables,
         var_name="Strategy",
-        value_vars=["participant.inflation", "sreal", "soptimal", "snaive"],
+        value_vars=value_variables,
         value_name="Savings",
     )
 
     dfts = pd.concat([df_stock, df_savings], axis=1, join="inner")
 
-    dfts.drop_duplicates(inplace=True)
+    dfts = dfts.drop_duplicates()
 
     ## Remove duplicate columns
     dfts = dfts.loc[:, ~dfts.columns.duplicated()].copy()
 
     ## Rename strategies
-    dfts["Strategy"] = dfts["Strategy"].replace(
-        ["finalStock", "sgnaive", "sgoptimal"], ["Average", "Naïve", "Best"]
-    )
+    dfts["Strategy"] = dfts["Strategy"].replace(strategy_stock_cols, strategy_names)
 
-    fig = sns.catplot(
+    # Create the base figure if no axis provided
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 7))
+
+    # Plot bar plot on primary y-axis
+    sns.barplot(
         data=dfts,
-        x="month",
+        x=month_col,
         y="Stock",
-        kind="bar",
         hue="Strategy",
-        legend_out=False,
+        ax=ax,
         estimator="mean",
         errorbar=None,
-        height=5,
-        aspect=1.75,
-        **kwargs,
+        palette=kwargs.get("palette", "tab10"),
     )
-    logger.debug("items %s", fig.axes_dict.items())
-    for phase, ax in fig.axes_dict.items():
-        logger.debug(phase)
-        if type(phase) == tuple and type(phase[0]) == str:
-            data_line_plot = dfts[
-                (dfts["phase"] == phase[1]) & (dfts["treatment"] == phase[0])
-            ]
-        elif type(phase) == tuple and type(phase[0]) != str:
-            data_line_plot = dfts[
-                (dfts["phase"] == phase[1])
-                & (dfts["participant.inflation"] == phase[0])
-            ]
-        else:
-            data_line_plot = dfts[dfts["phase"] == phase]
-        ax2 = ax.twinx()
-        sns.lineplot(
-            data=data_line_plot,
-            legend=None,
-            x="month",
-            y="Savings",
-            hue="Strategy",
-            ci=None,
-            ax=ax2,
-            palette=kwargs["palette"],
-        )
+
+    # Create secondary y-axis
+    ax2 = ax.twinx()
+
+    # Plot line plot on secondary y-axis
+    sns.lineplot(
+        data=dfts,
+        x=month_col,
+        y="Savings",
+        hue="Strategy",
+        ax=ax2,
+        legend=None,
+        ci=None,
+        palette=kwargs.get("palette", "tab10"),
+    )
+
+    # Set y-axis labels with proper positioning
+    ax.set_ylabel("Quantity in stock", labelpad=20, fontsize=kwargs.get("fontsize", 14))
+    ax2.set_ylabel(
+        "Savings balance (₮)", labelpad=20, fontsize=kwargs.get("fontsize", 14)
+    )
+
+    # Set y-axis limits for savings only if set_ylim is True
+    if set_ylim:
         ax2.set_ylim(0, dfts["Savings"].max() + 500)
 
-    ax2.set_xticks(ax2.get_xticks()[0:120:12])
-    plt.tight_layout()
-    plt.show()
+    return ax
 
 
 def calculate_opportunity_costs(
@@ -532,7 +549,7 @@ def main() -> None:
 
     con = duckdb.connect(DATABASE_FILE, read_only=False)
 
-    df = calculate_opportunity_costs(con, experiment=1)
+    df = calculate_opportunity_costs(con, experiment=2)
     logger.debug("df columns: %s", df.columns.to_list())
     export_data = input("Export data? (y/n): ")
     if export_data not in ("y", "n"):
@@ -551,23 +568,43 @@ def main() -> None:
     if graph_data == "y":
         if experiment_to_graph == 1:
             logger.debug("exp 1 plot")
+            fig, ax = plt.subplots(figsize=(10, 7))
             plot_savings_and_stock(
-                df, col="phase", row="participant.inflation", palette="tab10"
+                df,
+                month_col="month",
+                strategy_stock_cols=["finalStock", "sgoptimal", "sgnaive"],
+                strategy_savings_cols=["sreal", "soptimal", "snaive"],
+                strategy_names=["Average", "Best", "Naïve"],
+                palette="tab10",
+                ax=ax,
+                set_ylim=True,
             )
+            plt.show()
         else:
-            plot_savings_and_stock(df, col="phase", palette="tab10")
+            fig, ax = plt.subplots(figsize=(10, 7))
+            plot_savings_and_stock(
+                df,
+                month_col="month",
+                strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+                strategy_savings_cols=["soptimal", "snaive", "sreal"],
+                strategy_names=["Best", "Naïve", "Average"],
+                palette="tab10",
+                ax=ax,
+                set_ylim=True,
+            )
+            plt.show()
 
     # * Individual plots
     ## Convert to time series-esque dataframe for multi-bar plot
     df_stock = df.melt(
-        id_vars=["participant.round"] + PLOT_MELT_COLS,
+        id_vars=["participant.round"] + PLOT_MELT_COLS + ["month"],
         var_name="Strategy",
         value_vars=["finalStock", "sgoptimal", "sgnaive"],
         value_name="Stock",
     )
 
     df_savings = df.melt(
-        id_vars=["participant.round"] + PLOT_MELT_COLS,
+        id_vars=["participant.round"] + PLOT_MELT_COLS + ["month"],
         var_name="Strategy",
         value_vars=["sreal", "soptimal", "snaive"],
         value_name="Savings",
@@ -590,48 +627,20 @@ def main() -> None:
     if experiment_to_graph == 1:
         for n in range(2):
             for inflation in [430, 1012]:
-                fig, axes = plt.subplots(1, 1, figsize=(10, 7))
-                sns.barplot(
-                    ax=axes,
-                    data=dfts[
+                fig, ax = plt.subplots(figsize=(10, 7))
+                plot_savings_and_stock(
+                    dfts[
                         (dfts["participant.round"] == n + 1)
                         & (dfts["participant.inflation"] == inflation)
                     ],
-                    x="month",
-                    y="Stock",
+                    month_col="month",
+                    strategy_stock_cols=["finalStock", "sgoptimal", "sgnaive"],
+                    strategy_savings_cols=["sreal", "soptimal", "snaive"],
+                    strategy_names=["Average", "Best", "Naïve"],
                     palette="tab10",
-                    hue="Strategy",
-                    errorbar=None,
-                )
-                axes.set_xlabel("Month", labelpad=20, fontsize=14)
-                axes.set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
-                axes.legend(loc="upper center", fontsize=14)
-                inf_title = "4x30" if inflation == 430 else "10x12"
-                axes.set_title(
-                    f"Savings Game round {n+1}, inflation sequence {inf_title}",
-                    fontsize=14,
-                )
-
-                ax = axes.twinx()
-                sns.lineplot(
                     ax=ax,
-                    data=dfts[
-                        (dfts["participant.round"] == n + 1)
-                        & (dfts["participant.inflation"] == inflation)
-                    ],
-                    legend=None,
-                    x="month",
-                    y="Savings",
-                    palette="tab10",
-                    hue="Strategy",
-                    ci=None,
+                    set_ylim=True,
                 )
-                ax.set(xlabel=None)
-                ax.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
-
-                # * Reduce number of tick labels
-                ax.set_xticks(ax.get_xticks()[0:120:12])
-                ax.set_ylim(0, dfts["Savings"].max() + 500)
 
                 if export_figs == "y":
                     fig_name = n + 1
@@ -646,38 +655,17 @@ def main() -> None:
 
     else:
         for n in range(2):
-            fig, axes = plt.subplots(1, 1, figsize=(10, 7))
-            sns.barplot(
-                ax=axes,
-                data=dfts[dfts["participant.round"] == n + 1],
-                x="month",
-                y="Stock",
+            fig, ax = plt.subplots(figsize=(10, 7))
+            plot_savings_and_stock(
+                dfts[dfts["participant.round"] == n + 1],
+                month_col="month",
+                strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+                strategy_savings_cols=["soptimal", "snaive", "sreal"],
+                strategy_names=["Best", "Naïve", "Average"],
                 palette="tab10",
-                hue="Strategy",
-                errorbar=None,
-            )
-            axes.set_xlabel("Month", labelpad=20, fontsize=14)
-            axes.set_ylabel("Quantity in stock", labelpad=20, fontsize=14)
-            axes.legend(loc="upper center", fontsize=14)
-            axes.set_title(f"Savings Game round {n+1}", fontsize=14)
-
-            ax = axes.twinx()
-            sns.lineplot(
                 ax=ax,
-                data=dfts[dfts["participant.round"] == n + 1],
-                legend=None,
-                x="month",
-                y="Savings",
-                palette="tab10",
-                hue="Strategy",
-                ci=None,
+                set_ylim=True,
             )
-            ax.set(xlabel=None)
-            ax.set_ylabel("Savings balance (₮)", labelpad=20, fontsize=14)
-
-            # * Reduce number of tick labels
-            ax.set_xticks(ax.get_xticks()[0:120:12])
-            ax.set_ylim(0, dfts["Savings"].max() + 500)
 
             if export_figs == "y":
                 fig_name = n + 1

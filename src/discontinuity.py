@@ -48,7 +48,7 @@ def purchase_discontinuity(
         decision_quantity
     ].shift(1)
 
-    ## Remove all `decision quantitys` except at first phase change (and third from 10x12)
+    ## Remove all decision quantities except at first phase change (and third from 10x12)
     final_df[decision_quantity] = np.where(
         final_df["month"] == CHANGE_430 - (window - 1),
         final_df[decision_quantity],

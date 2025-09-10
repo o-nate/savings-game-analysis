@@ -14,6 +14,21 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def combine_mean_std_dicts(mean_dict, std_dict):
+    combined = {}
+    for outer_key in mean_dict:
+        combined[outer_key] = {}
+        for inner_key in mean_dict[outer_key]:
+            mean_val = mean_dict[outer_key][inner_key]
+            std_val = std_dict.get(outer_key, {}).get(inner_key, None)
+            if std_val is not None:
+                combined[outer_key][inner_key] = f"{mean_val:.2f}<br>({std_val:.2f})"
+            else:
+                combined[outer_key][inner_key] = f"{mean_val:.2f}<br>(N/A)"
+
+    return combined
+
+
 def combine_series(dataframes: List[pd.DataFrame], **kwargs) -> pd.DataFrame:
     """Merge dataframes from a list
 

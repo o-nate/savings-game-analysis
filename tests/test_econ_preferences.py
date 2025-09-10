@@ -10,15 +10,16 @@ from src.econ_preferences import (
     count_wisconsin_errors,
     create_econ_preferences_dataframe,
 )
-from src.utils.constants import EXP_2_DATABASE
+from src.utils.constants import EXP_1_DATABASE, EXP_2_DATABASE
 from src.utils.database import create_duckdb_database, table_exists
 from utils.logging_config import get_logger
 from tests.utils import constants
 
 logger = get_logger(__name__)
 
-DATABASE_FILE = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
-con = duckdb.connect(DATABASE_FILE, read_only=False)
+DATABASE_FILE_1 = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
+DATABASE_FILE_2 = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
+con = duckdb.connect(DATABASE_FILE_2, read_only=False)
 if table_exists(con, "Inflation") == False:
     create_duckdb_database(con, initial_creation=True)
 
@@ -83,11 +84,23 @@ result = df[df["participant.code"] == constants.WISC_PARTICIPANT_CODE]["n_SE"].v
 logger.debug("wisc result se %s", result)
 assert result == constants.WISC_N_SE
 
-logger.info("Testing creat dataframe")
-df_econ_preferences = create_econ_preferences_dataframe()
+logger.info("Testing create dataframe")
+df_econ_preferences = create_econ_preferences_dataframe(db_connection=con)
 result = df_econ_preferences.shape
-logger.debug("Shape %s vs %s", result, constants.DATAFRAME_SHAPE)
-assert result == constants.DATAFRAME_SHAPE
+logger.debug("Shape %s vs %s", result, constants.DATAFRAME_SHAPE_EXP_2)
+assert result == constants.DATAFRAME_SHAPE_EXP_2
+
+logger.info("Testing economic preference measures for Experiment 1")
+
+con = duckdb.connect(DATABASE_FILE_1, read_only=False)
+if table_exists(con, "Inflation") == False:
+    create_duckdb_database(con, initial_creation=True)
+
+logger.info("Testing create dataframe")
+df_econ_preferences = create_econ_preferences_dataframe(db_connection=con)
+result = df_econ_preferences.shape
+logger.debug("Shape %s vs %s", result, constants.DATAFRAME_SHAPE_EXP_1)
+assert result == constants.DATAFRAME_SHAPE_EXP_1
 
 
 logger.info("Tests complete")
