@@ -438,6 +438,11 @@ for measure in [
 
 # %% [markdown]
 ### Classify behavioral patterns
+#### t = 12
+# TODO add Accurate-consistent for t=12
+
+
+# %%
 for measure in [
     "Perception_bias",
     "Perception_sensitivity",
@@ -802,3 +807,17 @@ treatment_effect = intervention.create_diff_in_diff_table(
 treatment_effect = treatment_effect.set_index("")
 
 treatment_effect
+
+# %% [markdown]
+## Appendix E
+data = df_decisions_all.copy()
+data = data.rename(columns={"participant.inflation": "Inflation"})
+data["Inflation"] = np.where(data["Inflation"] == 430, "4x30", "10x12")
+sns.lmplot(
+    data[data["participant.round"] == 1],
+    x="Quant Perception",
+    y="Quant Expectation",
+    hue="participant.round",
+    col="Inflation",
+    legend=None,
+)

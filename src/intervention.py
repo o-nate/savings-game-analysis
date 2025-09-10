@@ -91,6 +91,7 @@ def create_learning_effect_table(
     measures: List[str],
     p_value_threshold: List[float],
     decimal_places: int = 2,
+    as_percentage: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Generate table to show the change in performance measures between Savings Game
     rounds.
@@ -121,8 +122,16 @@ def create_learning_effect_table(
         df_pivot[f"Change in {m}"] = df_pivot[(m, "post")] - df_pivot[(m, "pre")]
         before, after, p_value = calculate_change_in_measure(data, m)
 
+        # Apply percentage scaling if needed
+        if as_percentage:
+            before = before * 100
+            after = after * 100
+            diff_value = after - before
+        else:
+            diff_value = after - before
+
         ## Add difference
-        diff = str(round(after - before, decimal_places))
+        diff = str(round(diff_value, decimal_places))
         for pval in p_value_threshold:
             diff += "*" if p_value <= pval else ""
         dict_for_dataframe["Session 1"].append(before)
@@ -130,26 +139,18 @@ def create_learning_effect_table(
         dict_for_dataframe["Change in performance"].append(diff)
 
         ## Add standard deviation
-        standard_deviation = str(
-            round(
-                df_pivot[(m, "pre")].std(),
-                decimal_places,
-            )
-        )
+        std_pre = df_pivot[(m, "pre")].std()
+        std_post = df_pivot[(m, "post")].std()
+        std_change = df_pivot[f"Change in {m}"].std()
+        if as_percentage:
+            std_pre = std_pre * 100
+            std_post = std_post * 100
+            std_change = std_change * 100
+        standard_deviation = str(round(std_pre, decimal_places))
         dict_for_dataframe["Session 1"].append(f"({standard_deviation})")
-        standard_deviation = str(
-            round(
-                df_pivot[(m, "post")].std(),
-                decimal_places,
-            )
-        )
+        standard_deviation = str(round(std_post, decimal_places))
         dict_for_dataframe["Session 2"].append(f"({standard_deviation})")
-        standard_deviation = str(
-            round(
-                df_pivot[f"Change in {m}"].std(),
-                decimal_places,
-            )
-        )
+        standard_deviation = str(round(std_change, decimal_places))
         dict_for_dataframe["Change in performance"].append(f"({standard_deviation})")
     return pd.DataFrame(dict_for_dataframe), df_pivot
 
@@ -161,6 +162,7 @@ def create_diff_in_diff_table(
     control: str,
     p_value_threshold: list[float],
     decimal_places: int = 2,
+    as_percentage: bool = True,
 ) -> pd.DataFrame:
     """Generate table to show difference-in-difference results between treatments
 
@@ -195,19 +197,21 @@ def create_diff_in_diff_table(
         control_before, control_after, control_p_value = calculate_change_in_measure(
             data[data["treatment"] == control], m
         )
-        control_diff = control_after - control_before
+        control_diff_value = control_after - control_before
+        if as_percentage:
+            control_before = control_before * 100
+            control_after = control_after * 100
+            control_diff_value = control_diff_value * 100
         ## Add difference
-        diff = str(round(control_diff, decimal_places))
+        diff = str(round(control_diff_value, decimal_places))
         for pval in p_value_threshold:
             diff += "*" if control_p_value <= pval else ""
         dict_for_dataframe[control].append(diff)
         ## Add standard deviation
-        standard_deviation = str(
-            round(
-                df_pivot[df_pivot["treatment"] == control][f"Change in {m}"].std(),
-                decimal_places,
-            )
-        )
+        std_control = df_pivot[df_pivot["treatment"] == control][f"Change in {m}"].std()
+        if as_percentage:
+            std_control = std_control * 100
+        standard_deviation = str(round(std_control, decimal_places))
         dict_for_dataframe[control].append(f"({standard_deviation})")
 
         for treat in treatments:
@@ -219,30 +223,33 @@ def create_diff_in_diff_table(
             )
 
             # Add p-value stars
-            diff = str(
-                round(treatment_diff.mean() - control_diff.mean(), decimal_places)
-            )
+            diff_in_diff_value = treatment_diff.mean() - control_diff.mean()
+            if as_percentage:
+                before = before * 100
+                after = after * 100
+                diff_in_diff_value = diff_in_diff_value * 100
+            diff = str(round(diff_in_diff_value, decimal_places))
             for pval in p_value_threshold:
                 diff += "*" if diff_p_value <= pval else ""
             dict_for_dataframe[f"Diff {treat}"].append(diff)
 
-            ## Add standard deviation
-            # standard_deviation = str(round(diff_in_diff.std(), decimal_places))
-            dict_for_dataframe[f"Diff {treat}"].append(f"")
+            ## Add standard deviation (left blank as in original)
+            dict_for_dataframe[f"Diff {treat}"].append("")
 
             ## Add difference
-            diff = str(round(after - before, decimal_places))
+            diff_value = after - before
+            if as_percentage:
+                diff_value = diff_value
+            diff = str(round(diff_value, decimal_places))
             for pval in p_value_threshold:
                 diff += "*" if p_value <= pval else ""
             dict_for_dataframe[treat].append(diff)
 
             ## Add standard deviation
-            standard_deviation = str(
-                round(
-                    df_pivot[df_pivot["treatment"] == treat][f"Change in {m}"].std(),
-                    decimal_places,
-                )
-            )
+            std_treat = df_pivot[df_pivot["treatment"] == treat][f"Change in {m}"].std()
+            if as_percentage:
+                std_treat = std_treat * 100
+            standard_deviation = str(round(std_treat, decimal_places))
             dict_for_dataframe[treat].append(f"({standard_deviation})")
     return pd.DataFrame(dict_for_dataframe)
 
