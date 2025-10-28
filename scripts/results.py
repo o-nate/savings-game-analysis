@@ -139,6 +139,7 @@ df_questionnaire = con_exp_1.sql("SELECT * FROM Questionnaire").df()
 
 df_questionnaire[QUESTIONNAIRE_COLS].describe()
 
+
 # %%
 df_expectations = con_exp_1.sql("SELECT * FROM inf_expectation").df()
 df_perceptions = con_exp_1.sql("SELECT * FROM inf_estimate").df()
@@ -179,6 +180,43 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
 df_questionnaire = con_exp_2.sql("SELECT * FROM Questionnaire").df()
 
 df_questionnaire[QUESTIONNAIRE_COLS].describe()
+
+# %% [markdown]
+## Inflation estimations
+df_inflation_estimates_1 = con_exp_1.sql("SELECT * FROM Inflation").df()
+df_inflation_estimates_1 = df_inflation_estimates_1[
+    [
+        c
+        for c in df_inflation_estimates_1.columns
+        if ("infK_" in c)
+        and (c not in ["Inflation.1.player.infK_4", "Inflation.1.player.infK_5"])
+    ]
+]
+
+df_inflation_estimates_1["experiment"] = 1
+
+df_inflation_estimates_2 = con_exp_2.sql("SELECT * FROM Inflation").df()
+df_inflation_estimates_2 = df_inflation_estimates_2[
+    [c for c in df_inflation_estimates_2.columns if "infK_" in c]
+]
+df_inflation_estimates_2["experiment"] = 2
+
+df_inflation_estimates_1.columns = df_inflation_estimates_2.columns
+
+df_inflation_estimates = pd.concat([df_inflation_estimates_1, df_inflation_estimates_2])
+
+for measure in df_inflation_estimates.columns:
+    result = apply_statistical_test(df_inflation_estimates, measure, "experiment", 1, 2)
+    print(f"{measure} p-value: {result.pvalue}")
+
+results = df_inflation_estimates.groupby("experiment").describe(percentiles=[0.5])
+
+print(
+    """\n*Differences in inflation estimates between experiments are statically significant
+to the p<0.01 level, except for the estimate of the lowest inflation rate in the
+last 30 years.*"""
+)
+results[[c for c in results.columns if c[1] in ["mean", "std", "50%"]]].T
 
 # %%
 df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con_exp_2, experiment=2)
