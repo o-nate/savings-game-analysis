@@ -96,7 +96,7 @@ COLS = [
     "purchase_adaptation_30",
     "purchase_adaptation_12",
 ]
-CORRELATION_COLS = [
+PERFORMANCE_MEASURES_COLS = [
     "sreal_%",
     "early_%",
     "excess_%",
@@ -104,6 +104,8 @@ CORRELATION_COLS = [
     "Expectation_sensitivity",
     "purchase_adaptation_30",
     "Quant Perception_pattern_12",
+]
+INDIVIDUAL_CHARACTERISTICS_COLS = [
     "financial_literacy",
     "numeracy",
     "compound",
@@ -113,13 +115,11 @@ CORRELATION_COLS = [
     "riskPreferences_choice_count",
     "timePreferences_choice_count",
 ]
-
 TREATMENT_GROUPS = [
     "Intervention (Exp 1)",
     "Intervention 1 (Exp 2)",
     "Intervention 2 (Exp 2)",
 ]
-
 LOGIT_COLS = [
     "decision_pattern_30_perception_accuracy_AN",
     "decision_pattern_30_perception_accuracy_AP",
@@ -675,14 +675,16 @@ df_behavioral["n_switches"] = df_behavioral[
 
 # %%
 df_corr = create_dynamic_correlation_matrix(
-    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
+    df_behavioral[df_behavioral["Month"] == 120][
+        PERFORMANCE_MEASURES_COLS + INDIVIDUAL_CHARACTERISTICS_COLS
+    ],
     p_values=[0.1, 0.05, 0.01],
     include_stars=True,
     display=False,
     decimal_places=2,
     # mask_upper_triangle=True,
 )
-df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
+df_corr[df_corr.index.isin(PERFORMANCE_MEASURES_COLS)][INDIVIDUAL_CHARACTERISTICS_COLS]
 
 # %% [markdown]
 ## OLS/Logistic regression of performance and decision patterns on behavioral variables
@@ -693,18 +695,16 @@ df_regress = pd.get_dummies(
     dtype=int,
 )
 
-
 # %%
 df_regress = df_regress.rename(
     columns={"sreal_%": "sreal_percent"},
 )
 
-
 # %%
 regressions = {}
 
 for m in ["sreal_percent"] + LOGIT_COLS:
-    formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
+    formula = f"""{m} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
     if m in LOGIT_COLS:
@@ -807,6 +807,84 @@ treatment_effect = intervention.create_diff_in_diff_table(
 treatment_effect = treatment_effect.set_index("")
 
 treatment_effect
+
+# %% [markdown]
+### Diff-in-Diff with heterogeneous treatment effects: Individual characteristics
+# $$ Y_{it} = β₀ + β₁(Treat_i) + β₂(Post_t) + β₃(Characteristic_i) +
+#    β₄(Treat × Post) +
+#    β₅(Treat × Characteristic) +
+#    β₆(Post × Characteristic) +
+#    β₇(Treat × Post × Characteristic) +
+#    β₈(Y_{i0}) + ε_it
+# $$
+# Where:
+# - **β₄** = ATE of the intervention (main treatment effect)
+# - **β₇** = heterogeneous treatment effect (your key coefficient of interest)
+# - **$Y_{i0}$** = baseline outcome (for precision)
+
+# %%
+df_diff = pd.pivot_table(
+    df_treat[["participant.label", "phase", "treatment"] + PERFORMANCE_MEASURES_COLS],
+    index=["participant.label", "treatment"],
+    columns=["phase"],
+)
+df_diff.reset_index(inplace=True)
+for m in PERFORMANCE_MEASURES_COLS:
+    df_diff[f"change_{m}"] = df_diff[(m, "post")] - df_diff[(m, "pre")]
+
+# Combine column names if the second level is not blank
+df_diff.columns = df_diff.columns.map(
+    lambda col: (
+        col[0]
+        if isinstance(col, tuple)
+        and (len(col) < 2 or col[1] is None or str(col[1]).strip() == "")
+        else "_".join(col) if isinstance(col, tuple) else col
+    )
+)
+
+df_diff = df_diff.merge(
+    df_behavioral[df_behavioral["Month"] == 120][
+        ["participant.label"] + INDIVIDUAL_CHARACTERISTICS_COLS
+    ],
+    how="left",
+)
+
+df_diff.columns = [
+    col.replace("%", "percent") if isinstance(col, str) else col
+    for col in df_diff.columns
+]
+df_diff.columns = [
+    col.replace(" ", "_") if isinstance(col, str) else col for col in df_diff.columns
+]
+
+# %%
+treatments = [
+    "Intervention (Exp 1)",
+    "Intervention 1 (Exp 2)",
+    "Intervention 2 (Exp 2)",
+]
+
+regressions = {}
+for measure in PERFORMANCE_MEASURES_COLS:
+    print(measure)
+    measure_sanitized = (
+        measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
+    )
+    pre, diff = f"{measure_sanitized}_pre", f"change_{measure_sanitized}"
+    regressions[measure] = {}
+    for treatment in treatments:
+        for characteristic in INDIVIDUAL_CHARACTERISTICS_COLS:
+            if characteristic in ["numeracy", "financial_literacy", "compound"]:
+                formula = f"""{diff} ~ C(treatment)*C({characteristic}) + {pre}"""
+            else:
+                formula = f"""{diff} ~ C(treatment)*{characteristic} + {pre}"""
+
+            model = smf.ols(
+                formula=formula,
+                data=df_diff,
+            )
+            regressions[measure][characteristic] = model.fit()
+
 
 # %% [markdown]
 ## Appendix E
