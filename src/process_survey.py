@@ -326,6 +326,8 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
     if include_inflation:
         ## Convert to dataframe
         df_inf = pd.DataFrame(INFLATION_DICT)
+        logger.debug("df_inf: %s", df_inf)
+
         ## Merge with survey responses
         df_survey = pd.concat([df_survey, df_inf], ignore_index=True)
     df_survey["participant.inflation"].replace(

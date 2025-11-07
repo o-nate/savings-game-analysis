@@ -3,7 +3,25 @@
 import numpy as np
 import pandas as pd
 
-from src.utils.constants import EXP_1_COLUMNS_HASH, INFLATION_DICT
+from src.utils.constants import EXP_1_COLUMNS_HASH
+
+## Define annualized inflation, per 12 months
+INF_1012 = [0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79]
+INF_430 = [0.38, 0.47, 26.85, 55.49, 64.18, 0.38, 0.47, 26.85, 55.49, 64.18]
+
+INFLATION_DICT = {
+    "participant.inflation": [430 for m in range(19)] + [1012 for m in range(19)],
+    "Month": [(m + 1) * 12 for m in range(10)]
+    + [(m + 1) * 12 for m in range(9)]
+    + [(m + 1) * 12 for m in range(10)]
+    + [(m + 1) * 12 for m in range(9)],
+    "Measure": ["Actual" for m in range(10)]
+    + ["Upcoming" for m in range(9)]
+    + ["Actual" for m in range(10)]
+    + ["Upcoming" for m in range(9)],
+    "Estimate": INF_430 + INF_430[1:] + INF_1012 + INF_1012[1:],
+    "session": ["pre" for m in range(38)],
+}
 
 
 def conform_column_names(data: pd.DataFrame) -> pd.DataFrame:

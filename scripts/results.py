@@ -96,6 +96,22 @@ COLS = [
     "purchase_adaptation_30",
     "purchase_adaptation_12",
 ]
+PERFORMANCE_COLS = [
+    "sreal_%",
+    "early_%",
+    "late_%",
+    "excess_%",
+    "Perception_sensitivity",
+    "Mean Perception Bias",
+    "Expectation_sensitivity",
+    "Mean Expectation Bias",
+]
+BEHAVIOR_COLS = {
+    "sreal_%": "Total performance (%)",
+    "early_%": "Over-stocking (%)",
+    "late_%": "Under-stocking (%)",
+    "excess_%": "Wasteful-stocking (%)",
+}
 CORRELATION_COLS = [
     "sreal_%",
     "early_%",
@@ -148,12 +164,12 @@ df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con_exp_1, experiment=1
 df_opp_cost = df_opp_cost.rename(columns={"month": "Month"})
 df_opp_cost.head()
 
-df_survey = exp_1_patches.create_survey_df(
+df_survey_1 = exp_1_patches.create_survey_df(
     df_perceptions, df_expectations, include_inflation=True
 )
-df_survey = df_survey.drop("treatment", axis=1)
+df_survey_1 = df_survey_1.drop("treatment", axis=1)
 
-df_inf_measures = process_survey.pivot_inflation_measures(df_survey)
+df_inf_measures = process_survey.pivot_inflation_measures(df_survey_1)
 
 df_inf_measures = process_survey.include_inflation_measures(df_inf_measures)
 df_inf_measures["participant.inflation"] = np.where(
@@ -220,27 +236,12 @@ df_decisions_2["finalSavings_120"] = df_decisions_2.groupby("participant.code")[
 # %%
 df_decisions_1["exp"] = 1
 df_decisions_2["exp"] = 2
-cols = [
-    "sreal_%",
-    "early_%",
-    "excess_%",
-    "Perception_sensitivity",
-    "Mean Perception Bias",
-    "Expectation_sensitivity",
-    "Mean Expectation Bias",
-]
-new_cols = {
-    "sreal_%": "Total performance (%)",
-    "early_%": "Over-stocking (%)",
-    "excess_%": "Wasteful-stocking (%)",
-}
-df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
-logger.debug("df_decisions_all.shape: %s", df_decisions_all.shape)
+df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
 # %% [markdown]
 ## Savings Game parameters
-fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+fig, axs = plt.subplots(2, 2, figsize=(25, 15))
 
 # Plot savings and stock on first subplot
 calc_opp_costs.plot_savings_and_stock(
@@ -250,15 +251,32 @@ calc_opp_costs.plot_savings_and_stock(
     strategy_savings_cols=["soptimal", "snaive"],
     strategy_names=["Best", "Naïve"],
     palette="tab10",
-    ax=axs[0],
+    ax=axs[0][0],
     set_ylim=True,
     fontsize=20,
 )
 
-axs[0].set_xlabel("")
+axs[0][0].set_xlabel("")
 
-axs[0].legend(loc="upper left", fontsize=20)
-axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
+axs[0][0].legend(loc="upper left", fontsize=20)
+axs[0][0].set_xticks(axs[0][0].get_xticks()[0:120:12])
+
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive"],
+    strategy_savings_cols=["soptimal", "snaive"],
+    strategy_names=["Best", "Naïve"],
+    palette="tab10",
+    ax=axs[0][1],
+    set_ylim=True,
+    fontsize=20,
+)
+
+axs[0][1].set_xlabel("")
+
+axs[0][1].legend(loc="upper left", fontsize=20)
+axs[0][1].set_xticks(axs[0][1].get_xticks()[0:120:12])
 
 # Plot inflation estimates on second subplot
 estimates = ["4x30"]
@@ -272,13 +290,33 @@ sns.lineplot(
     errorbar=None,
     hue="Inflation sequence",
     style="Inflation sequence",
-    ax=axs[1],
+    ax=axs[1][0],
 )
 
 # Adjust titles and labels
-axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
-axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[1].legend(loc="upper left", fontsize=20)
+axs[1][0].set_xlabel("Month", labelpad=20, fontsize=20)
+axs[1][0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[1][0].legend(loc="upper left", fontsize=20)
+
+estimates = ["10x12"]
+df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
+df_inf_plot = df_inf_plot.replace("Actual", "10x12")
+df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+
+sns.lineplot(
+    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Inflation sequence",
+    style="Inflation sequence",
+    ax=axs[1][1],
+)
+
+# Adjust titles and labels
+axs[1][1].set_xlabel("Month", labelpad=20, fontsize=20)
+axs[1][1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[1][1].legend(loc="upper left", fontsize=20)
 
 plt.tight_layout()
 plt.show()
@@ -286,8 +324,6 @@ plt.show()
 
 # %% [markdown]
 ## Overall performance
-
-
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
         ["Perception_bias", "Expectation_bias"]
@@ -298,16 +334,16 @@ summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation"])[cols]
-    .describe()[[(c, "mean") for c in cols]]
+    .groupby(["participant.inflation"])[PERFORMANCE_COLS]
+    .describe()[[(c, "mean") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
 summary_std = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation"])[cols]
-    .describe()[[(c, "std") for c in cols]]
+    .groupby(["participant.inflation"])[PERFORMANCE_COLS]
+    .describe()[[(c, "std") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
 
@@ -315,7 +351,7 @@ summary.columns = summary.columns.get_level_values(0)
 
 summary = summary.rename(
     columns={
-        **new_cols
+        **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
             "Mean Perception Bias": "Perception Bias",
@@ -327,13 +363,15 @@ summary = summary.rename(
         }
     }
 )
-summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
+summary[[c for c in BEHAVIOR_COLS.values()]] = (
+    summary[[c for c in BEHAVIOR_COLS.values()]] * 100
+)
 summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
 # summary["Day"] = summary["Day"].astype(int)
 
 summary_dict = (
-    summary.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[2:]]]
+    summary.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[1:5]]]
     .to_dict()
 )
 
@@ -341,7 +379,7 @@ summary_std.columns = summary_std.columns.get_level_values(0)
 
 summary_std = summary_std.rename(
     columns={
-        **new_cols
+        **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
             "Mean Perception Bias": "Perception Bias",
@@ -353,15 +391,15 @@ summary_std = summary_std.rename(
         }
     }
 )
-summary_std[[c for c in new_cols.values()]] = (
-    summary_std[[c for c in new_cols.values()]] * 100
+summary_std[[c for c in BEHAVIOR_COLS.values()]] = (
+    summary_std[[c for c in BEHAVIOR_COLS.values()]] * 100
 )
 summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10x12")
 # summary_std["Day"] = summary_std["Day"].astype(int)
 
 summary_std_dict = (
-    summary_std.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[2:]]]
+    summary_std.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[1:5]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
@@ -810,6 +848,91 @@ treatment_effect
 
 # %% [markdown]
 ## Appendix E
+# %% [markdown]
+## Overall performance
+df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
+    df_decisions_all.groupby("participant.code")[
+        ["Perception_bias", "Expectation_bias"]
+    ].transform("mean")
+)
+
+summary = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
+    ]
+    .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
+    .describe()[[(c, "mean") for c in PERFORMANCE_COLS]]
+    .reset_index()
+)
+summary_std = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
+    ]
+    .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
+    .describe()[[(c, "std") for c in PERFORMANCE_COLS]]
+    .reset_index()
+)
+
+summary.columns = summary.columns.get_level_values(0)
+
+summary = summary.rename(
+    columns={
+        **BEHAVIOR_COLS
+        | {
+            "Perception_sensitivity": "Perception Sensitivity",
+            "Mean Perception Bias": "Perception Bias",
+            "Expectation_sensitivity": "Expectation Sensitivity",
+            "Mean Expectation Bias": "Expectation Bias",
+            "participant.inflation": "Inflation",
+            "exp": "Experiment",
+            # "participant.day": "Day",
+        }
+    }
+)
+summary[[c for c in BEHAVIOR_COLS.values()]] = (
+    summary[[c for c in BEHAVIOR_COLS.values()]] * 100
+)
+summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
+# summary["Day"] = summary["Day"].astype(int)
+
+summary_dict = (
+    summary.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[2:]]]
+    .to_dict()
+)
+
+summary_std.columns = summary_std.columns.get_level_values(0)
+
+summary_std = summary_std.rename(
+    columns={
+        **BEHAVIOR_COLS
+        | {
+            "Perception_sensitivity": "Perception Sensitivity",
+            "Mean Perception Bias": "Perception Bias",
+            "Expectation_sensitivity": "Expectation Sensitivity",
+            "Mean Expectation Bias": "Expectation Bias",
+            "participant.inflation": "Inflation",
+            "exp": "Experiment",
+            # "participant.day": "Day",
+        }
+    }
+)
+summary_std[[c for c in BEHAVIOR_COLS.values()]] = (
+    summary_std[[c for c in BEHAVIOR_COLS.values()]] * 100
+)
+summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10x12")
+# summary_std["Day"] = summary_std["Day"].astype(int)
+
+summary_std_dict = (
+    summary_std.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[2:]]]
+    .to_dict()
+)
+combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
+
+pd.DataFrame(combined_dict).style
+
+# %%
 data = df_decisions_all.copy()
 data = data.rename(columns={"participant.inflation": "Inflation"})
 data["Inflation"] = np.where(data["Inflation"] == 430, "4x30", "10x12")
