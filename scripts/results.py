@@ -102,9 +102,11 @@ PERFORMANCE_COLS = [
     "late_%",
     "excess_%",
     "Perception_sensitivity",
-    "Mean Perception Bias",
+    "Perception_bias_low",
+    "Perception_bias_high",
     "Expectation_sensitivity",
-    "Mean Expectation Bias",
+    "Expectation_bias_low",
+    "Expectation_bias_high",
 ]
 BEHAVIOR_COLS = {
     "sreal_%": "Total performance (%)",
@@ -143,6 +145,7 @@ LOGIT_COLS = [
     "decision_pattern_30_perception_accuracy_IP",
 ]
 
+
 # %%
 if not table_exists(con_exp_1, "Questionnaire"):
     create_duckdb_database(con_exp_1, experiment=1, initial_creation=True)
@@ -179,6 +182,8 @@ df_decisions_1 = df_opp_cost.merge(df_inf_measures, how="left")
 df_decisions_1 = df_decisions_1.merge(
     df_expectations[["participant.code", "participant.day"]], how="left"
 )
+
+df_decisions_1 = process_survey.separate_inflation_bias_by_phase(df_decisions_1)
 
 # * Store final savings at month t = 120
 df_decisions_1["finalSavings_120"] = (
@@ -217,7 +222,13 @@ df_inf_measures["Average Uncertain Expectation"] = df_inf_measures.groupby(
     "participant.code"
 )["Uncertain Expectation"].transform("mean")
 
+
+# %%
+## Separate inflation measures by high- and low-inflation
 df_decisions_2 = df_opp_cost.merge(df_inf_measures, how="left")
+df_decisions_2 = process_survey.separate_inflation_bias_by_phase(df_decisions_2)
+
+# %%
 df_decisions_2["participant.day"] = df_decisions_2["participant.round"]
 
 # * Filter for 4x30 inflation only
@@ -239,6 +250,17 @@ df_decisions_2["exp"] = 2
 
 df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
+# Add benchmark/naive strategies cumulative purchases
+df_decisions_all["cum_decision_optimal"] = df_decisions_all.groupby(
+    ["participant.code", "participant.inflation"]
+)["qoptimal"].cumsum()
+df_decisions_all["cum_decision_naive"] = df_decisions_all.groupby(
+    ["participant.code", "participant.inflation"]
+)["qnaive"].cumsum()
+
+df_decisions_all.head()
+
+
 # %% [markdown]
 ## Savings Game parameters
 fig, axs = plt.subplots(2, 2, figsize=(25, 15))
@@ -247,7 +269,7 @@ fig, axs = plt.subplots(2, 2, figsize=(25, 15))
 calc_opp_costs.plot_savings_and_stock(
     df_decisions_all[df_decisions_all["participant.inflation"] == 430],
     month_col="Month",
-    strategy_stock_cols=["sgoptimal", "sgnaive"],
+    strategy_stock_cols=["cum_decision_optimal", "cum_decision_naive"],
     strategy_savings_cols=["soptimal", "snaive"],
     strategy_names=["Best", "Naïve"],
     palette="tab10",
@@ -264,7 +286,7 @@ axs[0][0].set_xticks(axs[0][0].get_xticks()[0:120:12])
 calc_opp_costs.plot_savings_and_stock(
     df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
     month_col="Month",
-    strategy_stock_cols=["sgoptimal", "sgnaive"],
+    strategy_stock_cols=["cum_decision_optimal", "cum_decision_naive"],
     strategy_savings_cols=["soptimal", "snaive"],
     strategy_names=["Best", "Naïve"],
     palette="tab10",
@@ -324,10 +346,18 @@ plt.show()
 
 # %% [markdown]
 ## Overall performance
-df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
-    df_decisions_all.groupby("participant.code")[
-        ["Perception_bias", "Expectation_bias"]
-    ].transform("mean")
+df_decisions_all[
+    [
+        "Mean Expectation Bias",
+        "Mean Perception Bias",
+    ]
+] = df_decisions_all.groupby("participant.code")[
+    [
+        "Expectation_bias",
+        "Perception_bias",
+    ]
+].transform(
+    "mean"
 )
 
 summary = (
@@ -354,9 +384,11 @@ summary = summary.rename(
         **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
-            "Mean Perception Bias": "Perception Bias",
+            "Mean Perception Bias Low": "Perception_bias_low",
+            "Mean Perception Bias High": "Perception_bias_high",
             "Expectation_sensitivity": "Expectation Sensitivity",
-            "Mean Expectation Bias": "Expectation Bias",
+            "Mean Expectation Bias Low": "Expectation_bias_low",
+            "Mean Expectation Bias High": "Expectation_bias_high",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
             # "participant.day": "Day",
@@ -382,9 +414,11 @@ summary_std = summary_std.rename(
         **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
-            "Mean Perception Bias": "Perception Bias",
+            "Mean Perception Bias Low": "Perception_bias_low",
+            "Mean Perception Bias High": "Perception_bias_high",
             "Expectation_sensitivity": "Expectation Sensitivity",
-            "Mean Expectation Bias": "Expectation Bias",
+            "Mean Expectation Bias Low": "Expectation_bias_low",
+            "Mean Expectation Bias High": "Expectation_bias_high",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
             # "participant.day": "Day",
@@ -407,6 +441,23 @@ combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 pd.DataFrame(combined_dict).style
 
 # %% [markdown]
+### Inflation beliefs
+summary_dict = (
+    summary.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[5:]]]
+    .to_dict()
+)
+summary_std_dict = (
+    summary_std.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[5:]]]
+    .to_dict()
+)
+combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
+
+pd.DataFrame(combined_dict).style
+
+
+# %% [markdown]
 ### Plots
 fig, axs = plt.subplots(2, 1, figsize=(10, 10))
 
@@ -414,7 +465,7 @@ fig, axs = plt.subplots(2, 1, figsize=(10, 10))
 calc_opp_costs.plot_savings_and_stock(
     df_decisions_all[df_decisions_all["participant.inflation"] == 430],
     month_col="Month",
-    strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+    strategy_stock_cols=["cum_decision_optimal", "sgnaive", "cum_decision"],
     strategy_savings_cols=["soptimal", "snaive", "sreal"],
     strategy_names=["Best", "Naïve", "Average"],
     palette="tab10",
@@ -455,9 +506,11 @@ for measure in [
     "early_%",
     "excess_%",
     "Perception_sensitivity",
-    "Mean Perception Bias",
+    "Perception_bias_high",
+    "Perception_bias_low",
     "Expectation_sensitivity",
-    "Mean Expectation Bias",
+    "Expectation_bias_high",
+    "Expectation_bias_low",
 ]:
     result = apply_statistical_test(
         df_decisions_all[
@@ -472,6 +525,36 @@ for measure in [
         test="mannwhitneyu",
     )
     print(f"{measure} p-value: {result.pvalue}")
+
+# %% [markdown]
+## OLS regressions: Overall performance measures on inflation measures
+df_regress = df_decisions_all[(df_decisions_all["participant.inflation"] == 430)]
+df_regress = df_regress.rename(
+    columns={
+        "Mean Perception Bias": "avg_perception_bias",
+        "Mean Expectation Bias": "avg_expectation_bias",
+        "sreal_%": "sreal_percent",
+        "early_%": "early_percent",
+        "excess_%": "excess_percent",
+    },
+)
+
+# %%
+regressions = {}
+
+for m in ["sreal_percent", "early_percent", "excess_percent"]:
+    model = smf.ols(
+        formula=f"""{m} ~ Expectation_sensitivity + avg_expectation_bias\
+            + Perception_sensitivity + avg_perception_bias""",
+        data=df_regress[(df_regress["phase"] == "pre") & (df_regress["Month"] == 120)],
+    )
+    regressions[m] = model.fit()
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+results
 
 
 # %% [markdown]
@@ -622,6 +705,7 @@ df_decisions_all = decision_patterns.classify_subject_decision_patterns(
     month=12,
     coherent_decision=0,
     threshold_estimate=ANNUAL_INTEREST_RATE,
+    drop_na=False,
 )
 
 # * Remove perception accuracy to only compare coherent decisions
@@ -636,36 +720,6 @@ df_decisions_all["Quant Perception_pattern_12"] = np.where(
 df_decisions_all["purchase_adaptation_30"] = np.where(
     df_decisions_all["purchase_adaptation_30"] == "P", 1, 0
 )
-
-# %% [markdown]
-## OLS regressions: Overall performance measures on inflation measures
-df_regress = df_decisions_all[(df_decisions_all["participant.inflation"] == 430)]
-df_regress = df_regress.rename(
-    columns={
-        "Mean Perception Bias": "avg_perception_bias",
-        "Mean Expectation Bias": "avg_expectation_bias",
-        "sreal_%": "sreal_percent",
-        "early_%": "early_percent",
-        "excess_%": "excess_percent",
-    },
-)
-
-# %%
-regressions = {}
-
-for m in ["sreal_percent", "early_percent", "excess_percent"]:
-    model = smf.ols(
-        formula=f"""{m} ~ Expectation_sensitivity + avg_expectation_bias\
-            + Perception_sensitivity + avg_perception_bias""",
-        data=df_regress[(df_regress["phase"] == "pre") & (df_regress["Month"] == 120)],
-    )
-    regressions[m] = model.fit()
-results = summary_col(
-    results=list(regressions.values()),
-    stars=True,
-    model_names=list(regressions.keys()),
-)
-results
 
 # %% [markdown]
 ## Behavioral measures
@@ -704,7 +758,11 @@ df_behavioral = combine_series(
     how="left",
     on=["participant.label", "participant.round", "exp"],
 )
-assert df_behavioral.shape[1] == 76
+
+y_cols = [c for c in df_behavioral.columns if c.endswith("_y")]
+df_behavioral = df_behavioral.drop(columns=y_cols)
+
+df_behavioral.columns = df_behavioral.columns.str.removesuffix("_x")
 
 # %%
 df_behavioral["n_switches"] = df_behavioral[
@@ -849,7 +907,7 @@ treatment_effect
 # %% [markdown]
 ## Appendix E
 # %% [markdown]
-## Overall performance
+### Overall performance
 df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
     df_decisions_all.groupby("participant.code")[
         ["Perception_bias", "Expectation_bias"]
@@ -880,9 +938,11 @@ summary = summary.rename(
         **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
-            "Mean Perception Bias": "Perception Bias",
+            "Perception_bias_low": "Mean Perception Bias Low",
+            "Perception_bias_high": "Mean Perception Bias High",
             "Expectation_sensitivity": "Expectation Sensitivity",
-            "Mean Expectation Bias": "Expectation Bias",
+            "Expectation_bias_low": "Mean Expectation Bias Low",
+            "Expectation_bias_high": "Mean Expectation Bias High",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
             # "participant.day": "Day",
@@ -897,7 +957,7 @@ summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
 
 summary_dict = (
     summary.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[2:]]]
+    .describe()[[(c, "mean") for c in summary.columns[2:6]]]
     .to_dict()
 )
 
@@ -908,9 +968,11 @@ summary_std = summary_std.rename(
         **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
-            "Mean Perception Bias": "Perception Bias",
+            "Perception_bias_low": "Mean Perception Bias Low",
+            "Perception_bias_high": "Mean Perception Bias High",
             "Expectation_sensitivity": "Expectation Sensitivity",
-            "Mean Expectation Bias": "Expectation Bias",
+            "Expectation_bias_low": "Mean Expectation Bias Low",
+            "Expectation_bias_high": "Mean Expectation Bias High",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
             # "participant.day": "Day",
@@ -925,7 +987,23 @@ summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10
 
 summary_std_dict = (
     summary_std.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[2:]]]
+    .describe()[[(c, "mean") for c in summary_std.columns[2:6]]]
+    .to_dict()
+)
+combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
+
+pd.DataFrame(combined_dict).style
+
+# %% [markdown]
+### Inflation beliefs
+summary_dict = (
+    summary.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[6:]]]
+    .to_dict()
+)
+summary_std_dict = (
+    summary_std.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[6:]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
@@ -944,3 +1022,32 @@ sns.lmplot(
     col="Inflation",
     legend=None,
 )
+
+# %%
+### OLS Regression: Effects of belief accuracy on performance with inflation-phase biases, 4×30 sequence
+df_regress = df_decisions_all[(df_decisions_all["participant.inflation"] == 430)]
+df_regress = df_regress.rename(
+    columns={
+        "Mean Perception Bias": "avg_perception_bias",
+        "Mean Expectation Bias": "avg_expectation_bias",
+        "sreal_%": "sreal_percent",
+        "early_%": "early_percent",
+        "excess_%": "excess_percent",
+    },
+)
+
+regressions = {}
+
+for m in ["sreal_percent", "early_percent", "excess_percent"]:
+    model = smf.ols(
+        formula=f"""{m} ~ Expectation_sensitivity + Expectation_bias_low + Expectation_bias_high\
+            + Perception_sensitivity + Perception_bias_low + Perception_bias_high""",
+        data=df_regress[(df_regress["phase"] == "pre") & (df_regress["Month"] == 120)],
+    )
+    regressions[m] = model.fit()
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+results

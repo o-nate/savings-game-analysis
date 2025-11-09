@@ -38,6 +38,7 @@ def classify_subject_decision_patterns(
     month: int,
     coherent_decision: int,
     threshold_estimate: int | float,
+    drop_na: bool = False,
 ) -> pd.DataFrame:
     """Classify subjects as Accurate-Coherent, Accurante-Incoherent, Inaccurate-Coherent,
     or Inaccurate-Incoherent
@@ -93,7 +94,11 @@ def classify_subject_decision_patterns(
         df[["participant.code", "treatment", new_column_name]], how="left"
     )
     logger.debug("new column: %s", new_column_name)
-    return data[data[new_column_name] != "N/A"]
+
+    if drop_na:
+        return data[data[new_column_name] != "N/A"]
+
+    return data
 
 
 def define_decision_patterns(
