@@ -114,6 +114,18 @@ BEHAVIOR_COLS = {
     "late_%": "Under-stocking (%)",
     "excess_%": "Wasteful-stocking (%)",
 }
+CLASSIFICATION_COLS = [
+    "Month",
+    "sreal_%",
+    "early_%",
+    "excess_%",
+]
+NEW_CLASSIFICIATION_COLS = {
+    "Month": "Proportion (%)",
+    "sreal_%": "Total performance (%)",
+    "early_%": "Over-stocking (%)",
+    "excess_%": "Wasteful-stocking (%)",
+}
 CORRELATION_COLS = [
     "sreal_%",
     "early_%",
@@ -121,15 +133,15 @@ CORRELATION_COLS = [
     "Perception_sensitivity",
     "Expectation_sensitivity",
     "purchase_adaptation_30",
-    "Quant Perception_pattern_12",
+    "Quant Perception_consistent_12",
     "financial_literacy",
     "numeracy",
     "compound",
-    "n_switches",
     "wisconsin_choice_count",
+    "timePreferences_choice_count",
+    "n_switches",
     "lossAversion_choice_count",
     "riskPreferences_choice_count",
-    "timePreferences_choice_count",
 ]
 
 TREATMENT_GROUPS = [
@@ -139,10 +151,13 @@ TREATMENT_GROUPS = [
 ]
 
 LOGIT_COLS = [
-    "decision_pattern_30_perception_accuracy_AN",
-    "decision_pattern_30_perception_accuracy_AP",
+    "decision_pattern_30_perception_accuracy_SN",
+    "decision_pattern_30_perception_accuracy_SA",
     "decision_pattern_30_perception_accuracy_IN",
-    "decision_pattern_30_perception_accuracy_IP",
+    "decision_pattern_30_perception_accuracy_IA",
+    "perception_pattern_12_AC",
+    "perception_pattern_12_AI",
+    "perception_pattern_12_IC",
 ]
 
 
@@ -360,6 +375,9 @@ df_decisions_all[
     "mean"
 )
 
+# Store performance measures for appendix results below
+df_performance_measures = df_decisions_all.copy()
+
 summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
@@ -560,7 +578,55 @@ results
 # %% [markdown]
 ### Classify behavioral patterns
 #### t = 12
-# TODO add Accurate-consistent for t=12
+df_decisions_all = decision_patterns.classify_subject_decision_patterns(
+    data=df_decisions_all,
+    estimate_measure="Quant Perception",
+    decision_measure="finalStock",
+    month=12,
+    coherent_decision=0,
+    threshold_estimate=ANNUAL_INTEREST_RATE,
+    drop_na=True,
+)
+
+# %%
+summary = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120)
+        & (df_decisions_all["phase"] == "pre")
+        & (df_decisions_all["participant.inflation"] == 430)
+    ]
+    .groupby(["Quant Perception_pattern_12"])[CLASSIFICATION_COLS]
+    .describe()[
+        [(c, "count") if c == "Month" else (c, "mean") for c in CLASSIFICATION_COLS]
+    ]
+    .reset_index()
+)
+
+# For overall performance, bottom row
+summary_all = df_decisions_all[
+    (df_decisions_all["Month"] == 120)
+    & (df_decisions_all["phase"] == "pre")
+    & (df_decisions_all["participant.inflation"] == 430)
+].describe()
+summary_all = summary_all[summary_all.index == "mean"]
+summary_all = summary_all.rename(columns=NEW_CLASSIFICIATION_COLS)
+
+summary.columns = summary.columns.get_level_values(0)
+summary["Month"] = summary["Month"] / summary["Month"].sum()
+summary = summary.rename(columns=NEW_CLASSIFICIATION_COLS)
+summary[[c for c in NEW_CLASSIFICIATION_COLS.values()]] = (
+    summary[[c for c in NEW_CLASSIFICIATION_COLS.values()]] * 100
+)
+
+summary.loc[len(summary)] = [
+    "Overall",
+    100,
+    summary_all["Total performance (%)"].iat[0] * 100,
+    summary_all["Over-stocking (%)"].iat[0] * 100,
+    summary_all["Wasteful-stocking (%)"].iat[0] * 100,
+]
+
+summary
 
 
 # %%
@@ -576,7 +642,10 @@ for measure in [
 
 
 df_decisions_all["perception_accuracy"] = decision_patterns.classify_perception(
-    df_decisions_all["Perception_sensitivity"], ACCURATE_PERCEPTIONS_THRESHOLD
+    df_decisions_all["Perception_sensitivity"],
+    ACCURATE_PERCEPTIONS_THRESHOLD,
+    accurate_label="S",
+    inaccurate_label="I",
 )
 
 # * Include qualitative perceptions for Experiment 2
@@ -599,7 +668,10 @@ df_decisions_all["qualitative_perception_accuracy"] = (
 for month in [12, 30]:
     df_decisions_all[f"purchase_adaptation_{month}"] = (
         decision_patterns.classify_purchase_adaptation(
-            df_decisions_all, comparison_start_month=month
+            df_decisions_all,
+            comparison_start_month=month,
+            positive_adaptation_label="A",
+            negative_adaptation_label="N",
         )
     )
     for inflation_measure in ["perception_accuracy", "qualitative_perception_accuracy"]:
@@ -609,30 +681,18 @@ for month in [12, 30]:
             )
         )
 
-# %%
-cols = [
-    "Month",
-    "sreal_%",
-    "early_%",
-    "excess_%",
-]
-new_cols = {
-    "Month": "Proportion (%)",
-    "sreal_%": "Total performance (%)",
-    "early_%": "Over-stocking (%)",
-    "excess_%": "Wasteful-stocking (%)",
-}
-
 # %%[markdown]
-#### Quantitative pattern
+#### Quantitative pattern, t=30
 summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120)
         & (df_decisions_all["phase"] == "pre")
         & (df_decisions_all["participant.inflation"] == 430)
     ]
-    .groupby(["decision_pattern_30_perception_accuracy"])[cols]
-    .describe()[[(c, "count") if c == "Month" else (c, "mean") for c in cols]]
+    .groupby(["decision_pattern_30_perception_accuracy"])[CLASSIFICATION_COLS]
+    .describe()[
+        [(c, "count") if c == "Month" else (c, "mean") for c in CLASSIFICATION_COLS]
+    ]
     .reset_index()
 )
 
@@ -643,49 +703,14 @@ summary_all = df_decisions_all[
     & (df_decisions_all["participant.inflation"] == 430)
 ].describe()
 summary_all = summary_all[summary_all.index == "mean"]
-summary_all = summary_all.rename(columns=new_cols)
+summary_all = summary_all.rename(columns=NEW_CLASSIFICIATION_COLS)
 
 summary.columns = summary.columns.get_level_values(0)
 summary["Month"] = summary["Month"] / summary["Month"].sum()
-summary = summary.rename(columns=new_cols)
-summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
-
-summary.loc[len(summary)] = [
-    "Overall",
-    100,
-    summary_all["Total performance (%)"].iat[0] * 100,
-    summary_all["Over-stocking (%)"].iat[0] * 100,
-    summary_all["Wasteful-stocking (%)"].iat[0] * 100,
-]
-
-summary
-
-# %%[markdown]
-#### Qualitative pattern
-summary = (
-    df_decisions_all[
-        (df_decisions_all["Month"] == 120)
-        & (df_decisions_all["exp"] == 2)
-        & (df_decisions_all["phase"] == "pre")
-    ]
-    .groupby(["decision_pattern_30_qualitative_perception_accuracy"])[cols]
-    .describe()[[(c, "count") if c == "Month" else (c, "mean") for c in cols]]
-    .reset_index()
+summary = summary.rename(columns=NEW_CLASSIFICIATION_COLS)
+summary[[c for c in NEW_CLASSIFICIATION_COLS.values()]] = (
+    summary[[c for c in NEW_CLASSIFICIATION_COLS.values()]] * 100
 )
-
-# For overall performance, bottom row
-summary_all = df_decisions_all[
-    (df_decisions_all["Month"] == 120)
-    & (df_decisions_all["exp"] == 2)
-    & (df_decisions_all["phase"] == "pre")
-].describe()
-summary_all = summary_all[summary_all.index == "mean"]
-summary_all = summary_all.rename(columns=new_cols)
-
-summary.columns = summary.columns.get_level_values(0)
-summary["Month"] = summary["Month"] / summary["Month"].sum()
-summary = summary.rename(columns=new_cols)
-summary[[c for c in new_cols.values()]] = summary[[c for c in new_cols.values()]] * 100
 
 summary.loc[len(summary)] = [
     "Overall",
@@ -698,27 +723,17 @@ summary.loc[len(summary)] = [
 summary
 
 # %%
-df_decisions_all = decision_patterns.classify_subject_decision_patterns(
-    data=df_decisions_all,
-    estimate_measure="Quant Perception",
-    decision_measure="finalStock",
-    month=12,
-    coherent_decision=0,
-    threshold_estimate=ANNUAL_INTEREST_RATE,
-    drop_na=False,
-)
-
 # * Remove perception accuracy to only compare coherent decisions
-df_decisions_all["Quant Perception_pattern_12"] = df_decisions_all[
+df_decisions_all["Quant Perception_consistent_12"] = df_decisions_all[
     "Quant Perception_pattern_12"
 ].str[1]
 
 # * Set both purchase adapations as binary variables
-df_decisions_all["Quant Perception_pattern_12"] = np.where(
-    df_decisions_all["Quant Perception_pattern_12"] == "C", 1, 0
+df_decisions_all["Quant Perception_consistent_12"] = np.where(
+    df_decisions_all["Quant Perception_consistent_12"] == "C", 1, 0
 )
 df_decisions_all["purchase_adaptation_30"] = np.where(
-    df_decisions_all["purchase_adaptation_30"] == "P", 1, 0
+    df_decisions_all["purchase_adaptation_30"] == "A", 1, 0
 )
 
 # %% [markdown]
@@ -776,12 +791,11 @@ df_corr = create_dynamic_correlation_matrix(
     include_stars=True,
     display=False,
     decimal_places=2,
-    # mask_upper_triangle=True,
 )
-df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
+df_corr[df_corr.index.isin(CORRELATION_COLS[7:13])][CORRELATION_COLS[:7]]
 
 # %% [markdown]
-## OLS/Logistic regression of performance and decision patterns on behavioral variables
+## OLS/Logistic regression of performance and decision patterns on behavioral variables (Condensed)
 df_regress = pd.get_dummies(
     df_behavioral,
     columns=["decision_pattern_30_perception_accuracy"],
@@ -789,17 +803,30 @@ df_regress = pd.get_dummies(
     dtype=int,
 )
 
-
-# %%
-df_regress = df_regress.rename(
-    columns={"sreal_%": "sreal_percent"},
+df_regress = pd.get_dummies(
+    df_regress,
+    columns=["Quant Perception_pattern_12"],
+    drop_first=False,
+    dtype=int,
 )
 
 
 # %%
+df_regress = df_regress.rename(
+    columns={
+        "sreal_%": "sreal_percent",
+        "Quant Perception_pattern_12_AC": "perception_pattern_12_AC",
+        "Quant Perception_pattern_12_AI": "perception_pattern_12_AI",
+        "Quant Perception_pattern_12_IC": "perception_pattern_12_IC",
+    },
+)
+
+df_regress_individual_chars = df_regress.copy()
+
+# %%
 regressions = {}
 
-for m in ["sreal_percent"] + LOGIT_COLS:
+for m in ["sreal_percent"] + LOGIT_COLS[1:3]:
     formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
@@ -844,6 +871,21 @@ df_learn = df_decisions_all[
     & (df_decisions_all["Month"] == 120)
 ]
 
+df_learn = pd.get_dummies(
+    df_learn,
+    columns=["decision_pattern_30_perception_accuracy"],
+    drop_first=False,
+    dtype=int,
+)
+
+df_learn = pd.get_dummies(
+    df_learn,
+    columns=["Quant Perception_pattern_12"],
+    drop_first=False,
+    dtype=int,
+)
+# %%
+
 learning_effect, _ = intervention.create_learning_effect_table(
     df_learn,
     [
@@ -853,9 +895,11 @@ learning_effect, _ = intervention.create_learning_effect_table(
         "Perception_sensitivity",
         "Expectation_sensitivity",
         "purchase_adaptation_30",
-        "Quant Perception_pattern_12",
+        "Quant Perception_consistent_12",
+        "decision_pattern_30_perception_accuracy_IA",
     ],
     p_value_threshold=[0.1, 0.05, 0.01],
+    decimal_places=2,
 )
 learning_effect = learning_effect.set_index("")
 learning_effect
@@ -893,7 +937,7 @@ treatment_effect = intervention.create_diff_in_diff_table(
         "Perception_sensitivity",
         "Expectation_sensitivity",
         "purchase_adaptation_30",
-        "Quant Perception_pattern_12",
+        "Quant Perception_consistent_12",
     ],
     treatments=TREATMENT_GROUPS,
     control="Control",
@@ -908,23 +952,25 @@ treatment_effect
 ## Appendix E
 # %% [markdown]
 ### Overall performance
-df_decisions_all[["Mean Perception Bias", "Mean Expectation Bias"]] = (
-    df_decisions_all.groupby("participant.code")[
+df_performance_measures[["Mean Perception Bias", "Mean Expectation Bias"]] = (
+    df_performance_measures.groupby("participant.code")[
         ["Perception_bias", "Expectation_bias"]
     ].transform("mean")
 )
 
 summary = (
-    df_decisions_all[
-        (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
+    df_performance_measures[
+        (df_performance_measures["Month"] == 120)
+        & (df_performance_measures["phase"] == "pre")
     ]
     .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
     .describe()[[(c, "mean") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
 summary_std = (
-    df_decisions_all[
-        (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
+    df_performance_measures[
+        (df_performance_measures["Month"] == 120)
+        & (df_performance_measures["phase"] == "pre")
     ]
     .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
     .describe()[[(c, "std") for c in PERFORMANCE_COLS]]
@@ -1011,7 +1057,7 @@ combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 pd.DataFrame(combined_dict).style
 
 # %%
-data = df_decisions_all.copy()
+data = df_performance_measures.copy()
 data = data.rename(columns={"participant.inflation": "Inflation"})
 data["Inflation"] = np.where(data["Inflation"] == 430, "4x30", "10x12")
 sns.lmplot(
@@ -1025,7 +1071,164 @@ sns.lmplot(
 
 # %%
 ### OLS Regression: Effects of belief accuracy on performance with inflation-phase biases, 4×30 sequence
-df_regress = df_decisions_all[(df_decisions_all["participant.inflation"] == 430)]
+df_regress = df_performance_measures[
+    (df_performance_measures["participant.inflation"] == 430)
+]
+df_regress = df_regress.rename(
+    columns={
+        "Mean Perception Bias": "avg_perception_bias",
+        "Mean Expectation Bias": "avg_expectation_bias",
+        "sreal_%": "sreal_percent",
+        "early_%": "early_percent",
+        "excess_%": "excess_percent",
+    },
+)
+
+regressions = {}
+
+for m in ["sreal_percent", "early_percent", "excess_percent"]:
+    model = smf.ols(
+        formula=f"""{m} ~ Expectation_sensitivity + Expectation_bias_low + Expectation_bias_high\
+            + Perception_sensitivity + Perception_bias_low + Perception_bias_high""",
+        data=df_regress[(df_regress["phase"] == "pre") & (df_regress["Month"] == 120)],
+    )
+    regressions[m] = model.fit()
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+results
+
+# %% [markdown]
+### Belief-behavior classification (qualitative)
+summary = (
+    df_decisions_all[
+        (df_decisions_all["Month"] == 120)
+        & (df_decisions_all["exp"] == 2)
+        & (df_decisions_all["phase"] == "pre")
+    ]
+    .groupby(["decision_pattern_30_qualitative_perception_accuracy"])[
+        CLASSIFICATION_COLS
+    ]
+    .describe()[
+        [(c, "count") if c == "Month" else (c, "mean") for c in CLASSIFICATION_COLS]
+    ]
+    .reset_index()
+)
+
+# For overall performance, bottom row
+summary_all = df_decisions_all[
+    (df_decisions_all["Month"] == 120)
+    & (df_decisions_all["exp"] == 2)
+    & (df_decisions_all["phase"] == "pre")
+].describe()
+summary_all = summary_all[summary_all.index == "mean"]
+summary_all = summary_all.rename(columns=NEW_CLASSIFICIATION_COLS)
+
+summary.columns = summary.columns.get_level_values(0)
+summary["Month"] = summary["Month"] / summary["Month"].sum()
+summary = summary.rename(columns=NEW_CLASSIFICIATION_COLS)
+summary[[c for c in NEW_CLASSIFICIATION_COLS.values()]] = (
+    summary[[c for c in NEW_CLASSIFICIATION_COLS.values()]] * 100
+)
+
+summary.loc[len(summary)] = [
+    "Overall",
+    100,
+    summary_all["Total performance (%)"].iat[0] * 100,
+    summary_all["Over-stocking (%)"].iat[0] * 100,
+    summary_all["Wasteful-stocking (%)"].iat[0] * 100,
+]
+
+summary
+
+# %% [markdown]
+### complete behavioral correlation matrix
+df_corr = create_dynamic_correlation_matrix(
+    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
+    p_values=[0.1, 0.05, 0.01],
+    include_stars=True,
+    display=False,
+    decimal_places=2,
+)
+df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
+
+# %% [markdown]
+### OLS/Logistic regression of performance and decision patterns on behavioral variables (complete)
+
+regressions = {}
+
+for m in ["sreal_percent"] + LOGIT_COLS:
+    formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
+                + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
+                    + timePreferences_choice_count"""
+    if m in LOGIT_COLS:
+        model = smf.logit(
+            formula=formula,
+            data=df_regress_individual_chars[
+                (df_regress_individual_chars["phase"] == "pre")
+                & (df_regress_individual_chars["Month"] == 120)
+            ],
+        )
+    else:
+        model = smf.ols(
+            formula=formula,
+            data=df_regress_individual_chars[
+                (df_regress_individual_chars["phase"] == "pre")
+                & (df_regress_individual_chars["Month"] == 120)
+            ],
+        )
+    regressions[m] = model.fit()
+
+# Define custom info_dict to show Pseudo R-squared for logistic models
+info_dict = {
+    "Pseudo R-squared": lambda x: (
+        "%#8.3f" % x.prsquared if hasattr(x, "prsquared") else ""
+    ),
+}
+
+# Create the summary table with the info_dict parameter
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+    info_dict=info_dict,
+)
+
+results
+
+# %% [markdown]
+### Learning effect (complete)
+learning_effect, _ = intervention.create_learning_effect_table(
+    df_learn,
+    [
+        "sreal_%",
+        "early_%",
+        "excess_%",
+        "Perception_sensitivity",
+        "Expectation_sensitivity",
+        "purchase_adaptation_30",
+        "Quant Perception_consistent_12",
+        "decision_pattern_30_perception_accuracy_SA",
+        "decision_pattern_30_perception_accuracy_IN",
+        "decision_pattern_30_perception_accuracy_IA",
+        "decision_pattern_30_perception_accuracy_SN",
+        "Quant Perception_pattern_12_AC",
+        "Quant Perception_pattern_12_AI",
+        "Quant Perception_pattern_12_IC",
+    ],
+    p_value_threshold=[0.1, 0.05, 0.01],
+)
+learning_effect = learning_effect.set_index("")
+learning_effect
+
+
+# %%
+### ANCOVA: Intervention effects
+df_regress = df_performance_measures[
+    (df_performance_measures["participant.inflation"] == 430)
+]
 df_regress = df_regress.rename(
     columns={
         "Mean Perception Bias": "avg_perception_bias",
