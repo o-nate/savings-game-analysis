@@ -822,9 +822,7 @@ df_behavioral["n_switches"] = df_behavioral[
 
 # %%
 df_corr = create_dynamic_correlation_matrix(
-    df_behavioral[df_behavioral["Month"] == 120][
-        PERFORMANCE_MEASURES_COLS + INDIVIDUAL_CHARACTERISTICS_COLS
-    ],
+    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
     p_values=[0.1, 0.05, 0.01],
     include_stars=True,
     display=False,
@@ -1002,12 +1000,12 @@ treatment_effect
 
 # %%
 df_diff = pd.pivot_table(
-    df_treat[["participant.label", "phase", "treatment"] + PERFORMANCE_MEASURES_COLS],
+    df_treat[["participant.label", "phase", "treatment"] + CORRELATION_COLS[:7]],
     index=["participant.label", "treatment"],
     columns=["phase"],
 )
 df_diff.reset_index(inplace=True)
-for m in PERFORMANCE_MEASURES_COLS:
+for m in CORRELATION_COLS[:7]:
     df_diff[f"change_{m}"] = df_diff[(m, "post")] - df_diff[(m, "pre")]
 
 # Combine column names if the second level is not blank
@@ -1022,7 +1020,7 @@ df_diff.columns = df_diff.columns.map(
 
 df_diff = df_diff.merge(
     df_behavioral[df_behavioral["Month"] == 120][
-        ["participant.label"] + INDIVIDUAL_CHARACTERISTICS_COLS
+        ["participant.label"] + CORRELATION_COLS[7:]
     ],
     how="left",
 )
@@ -1043,19 +1041,19 @@ treatments = [
 ]
 
 regressions = {}
-for measure in PERFORMANCE_MEASURES_COLS:
+for measure in CORRELATION_COLS[:7]:
     print(measure)
     measure_sanitized = (
         measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
     )
-    pre, diff = f"{measure_sanitized}_pre", f"change_{measure_sanitized}"
+    pre, post = f"{measure_sanitized}_pre", f"{measure_sanitized}_post"
     regressions[measure] = {}
     for treatment in treatments:
-        for characteristic in INDIVIDUAL_CHARACTERISTICS_COLS:
+        for characteristic in CORRELATION_COLS[7:]:
             if characteristic in ["numeracy", "financial_literacy", "compound"]:
-                formula = f"""{diff} ~ C(treatment)*C({characteristic}) + {pre}"""
+                formula = f"""{post} ~ C(treatment)*C({characteristic}) + {pre}"""
             else:
-                formula = f"""{diff} ~ C(treatment)*{characteristic} + {pre}"""
+                formula = f"""{post} ~ C(treatment)*{characteristic} + {pre}"""
 
             model = smf.ols(
                 formula=formula,
@@ -1342,28 +1340,18 @@ learning_effect
 
 # %%
 ### ANCOVA: Intervention effects
-df_regress = df_performance_measures[
-    (df_performance_measures["participant.inflation"] == 430)
-]
-df_regress = df_regress.rename(
-    columns={
-        "Mean Perception Bias": "avg_perception_bias",
-        "Mean Expectation Bias": "avg_expectation_bias",
-        "sreal_%": "sreal_percent",
-        "early_%": "early_percent",
-        "excess_%": "excess_percent",
-    },
-)
-
 regressions = {}
-
-for m in ["sreal_percent", "early_percent", "excess_percent"]:
-    model = smf.ols(
-        formula=f"""{m} ~ Expectation_sensitivity + Expectation_bias_low + Expectation_bias_high\
-            + Perception_sensitivity + Perception_bias_low + Perception_bias_high""",
-        data=df_regress[(df_regress["phase"] == "pre") & (df_regress["Month"] == 120)],
+for measure in CORRELATION_COLS[:7]:
+    measure_sanitized = (
+        measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
     )
-    regressions[m] = model.fit()
+    regressions[measure] = {}
+    formula = f"""{measure_sanitized}_post ~ C(treatment) + {measure_sanitized}_pre"""
+    model = smf.ols(
+        formula=formula,
+        data=df_diff,
+    )
+    regressions[measure] = model.fit()
 results = summary_col(
     results=list(regressions.values()),
     stars=True,
