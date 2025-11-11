@@ -143,13 +143,11 @@ CORRELATION_COLS = [
     "lossAversion_choice_count",
     "riskPreferences_choice_count",
 ]
-
 TREATMENT_GROUPS = [
     "Intervention (Exp 1)",
     "Intervention 1 (Exp 2)",
     "Intervention 2 (Exp 2)",
 ]
-
 LOGIT_COLS = [
     "decision_pattern_30_perception_accuracy_SN",
     "decision_pattern_30_perception_accuracy_SA",
@@ -172,6 +170,7 @@ if not table_exists(con_exp_2, "Questionnaire"):
 df_questionnaire = con_exp_1.sql("SELECT * FROM Questionnaire").df()
 
 df_questionnaire[QUESTIONNAIRE_COLS].describe()
+
 
 # %%
 df_expectations = con_exp_1.sql("SELECT * FROM inf_expectation").df()
@@ -215,6 +214,43 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
 df_questionnaire = con_exp_2.sql("SELECT * FROM Questionnaire").df()
 
 df_questionnaire[QUESTIONNAIRE_COLS].describe()
+
+# %% [markdown]
+## Inflation estimations
+df_inflation_estimates_1 = con_exp_1.sql("SELECT * FROM Inflation").df()
+df_inflation_estimates_1 = df_inflation_estimates_1[
+    [
+        c
+        for c in df_inflation_estimates_1.columns
+        if ("infK_" in c)
+        and (c not in ["Inflation.1.player.infK_4", "Inflation.1.player.infK_5"])
+    ]
+]
+
+df_inflation_estimates_1["experiment"] = 1
+
+df_inflation_estimates_2 = con_exp_2.sql("SELECT * FROM Inflation").df()
+df_inflation_estimates_2 = df_inflation_estimates_2[
+    [c for c in df_inflation_estimates_2.columns if "infK_" in c]
+]
+df_inflation_estimates_2["experiment"] = 2
+
+df_inflation_estimates_1.columns = df_inflation_estimates_2.columns
+
+df_inflation_estimates = pd.concat([df_inflation_estimates_1, df_inflation_estimates_2])
+
+for measure in df_inflation_estimates.columns:
+    result = apply_statistical_test(df_inflation_estimates, measure, "experiment", 1, 2)
+    print(f"{measure} p-value: {result.pvalue}")
+
+results = df_inflation_estimates.groupby("experiment").describe(percentiles=[0.5])
+
+print(
+    """\n*Differences in inflation estimates between experiments are statically significant
+to the p<0.01 level, except for the estimate of the lowest inflation rate in the
+last 30 years.*"""
+)
+results[[c for c in results.columns if c[1] in ["mean", "std", "50%"]]].T
 
 # %%
 df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con_exp_2, experiment=2)
@@ -786,7 +822,9 @@ df_behavioral["n_switches"] = df_behavioral[
 
 # %%
 df_corr = create_dynamic_correlation_matrix(
-    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
+    df_behavioral[df_behavioral["Month"] == 120][
+        PERFORMANCE_MEASURES_COLS + INDIVIDUAL_CHARACTERISTICS_COLS
+    ],
     p_values=[0.1, 0.05, 0.01],
     include_stars=True,
     display=False,
@@ -947,6 +985,84 @@ treatment_effect = intervention.create_diff_in_diff_table(
 treatment_effect = treatment_effect.set_index("")
 
 treatment_effect
+
+# %% [markdown]
+### Diff-in-Diff with heterogeneous treatment effects: Individual characteristics
+# $$ Y_{it} = β₀ + β₁(Treat_i) + β₂(Post_t) + β₃(Characteristic_i) +
+#    β₄(Treat × Post) +
+#    β₅(Treat × Characteristic) +
+#    β₆(Post × Characteristic) +
+#    β₇(Treat × Post × Characteristic) +
+#    β₈(Y_{i0}) + ε_it
+# $$
+# Where:
+# - **β₄** = ATE of the intervention (main treatment effect)
+# - **β₇** = heterogeneous treatment effect (your key coefficient of interest)
+# - **$Y_{i0}$** = baseline outcome (for precision)
+
+# %%
+df_diff = pd.pivot_table(
+    df_treat[["participant.label", "phase", "treatment"] + PERFORMANCE_MEASURES_COLS],
+    index=["participant.label", "treatment"],
+    columns=["phase"],
+)
+df_diff.reset_index(inplace=True)
+for m in PERFORMANCE_MEASURES_COLS:
+    df_diff[f"change_{m}"] = df_diff[(m, "post")] - df_diff[(m, "pre")]
+
+# Combine column names if the second level is not blank
+df_diff.columns = df_diff.columns.map(
+    lambda col: (
+        col[0]
+        if isinstance(col, tuple)
+        and (len(col) < 2 or col[1] is None or str(col[1]).strip() == "")
+        else "_".join(col) if isinstance(col, tuple) else col
+    )
+)
+
+df_diff = df_diff.merge(
+    df_behavioral[df_behavioral["Month"] == 120][
+        ["participant.label"] + INDIVIDUAL_CHARACTERISTICS_COLS
+    ],
+    how="left",
+)
+
+df_diff.columns = [
+    col.replace("%", "percent") if isinstance(col, str) else col
+    for col in df_diff.columns
+]
+df_diff.columns = [
+    col.replace(" ", "_") if isinstance(col, str) else col for col in df_diff.columns
+]
+
+# %%
+treatments = [
+    "Intervention (Exp 1)",
+    "Intervention 1 (Exp 2)",
+    "Intervention 2 (Exp 2)",
+]
+
+regressions = {}
+for measure in PERFORMANCE_MEASURES_COLS:
+    print(measure)
+    measure_sanitized = (
+        measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
+    )
+    pre, diff = f"{measure_sanitized}_pre", f"change_{measure_sanitized}"
+    regressions[measure] = {}
+    for treatment in treatments:
+        for characteristic in INDIVIDUAL_CHARACTERISTICS_COLS:
+            if characteristic in ["numeracy", "financial_literacy", "compound"]:
+                formula = f"""{diff} ~ C(treatment)*C({characteristic}) + {pre}"""
+            else:
+                formula = f"""{diff} ~ C(treatment)*{characteristic} + {pre}"""
+
+            model = smf.ols(
+                formula=formula,
+                data=df_diff,
+            )
+            regressions[measure][characteristic] = model.fit()
+
 
 # %% [markdown]
 ## Appendix E
