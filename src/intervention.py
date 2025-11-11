@@ -115,7 +115,7 @@ def create_learning_effect_table(
         columns=["phase"],
     )
     df_pivot.reset_index(inplace=True)
-    header_column = {"": [m for i in measures for m in [i, "(std)"]]}
+    header_column = {"": [m for i in measures for m in [i, ""]]}
     results_columns = {"Session 1": [], "Session 2": [], "Change in performance": []}
     dict_for_dataframe = header_column | results_columns
     for m in measures:
@@ -134,8 +134,8 @@ def create_learning_effect_table(
         diff = str(round(diff_value, decimal_places))
         for pval in p_value_threshold:
             diff += "*" if p_value <= pval else ""
-        dict_for_dataframe["Session 1"].append(before)
-        dict_for_dataframe["Session 2"].append(after)
+        dict_for_dataframe["Session 1"].append(str(round(before, decimal_places)))
+        dict_for_dataframe["Session 2"].append(str(round(after, decimal_places)))
         dict_for_dataframe["Change in performance"].append(diff)
 
         ## Add standard deviation
@@ -175,6 +175,8 @@ def create_diff_in_diff_table(
         p_value_threshold (List[float]): List of p-values that correspond to stars
         added on results
         decimal_places (int, optional): Decimal place to round to. Defaults to 2.
+        as_percentage (bool, optional): Whether to display results as percentages.
+        Defaults to True.
 
     Returns:
         pd.DataFrame: DataFrame with diff-in-diff results
