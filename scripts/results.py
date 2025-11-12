@@ -26,22 +26,10 @@ from src import (
 )
 from src.utils import exp_1_patches
 
-from src.stats_analysis import (
-    apply_statistical_test,
-    create_bonferroni_correlation_table,
-    create_dynamic_correlation_matrix,
-    create_pearson_correlation_matrix,
-    run_forward_selection,
-    run_treatment_forward_selection,
-)
-from src.utils.constants import (
-    ANNUAL_INTEREST_RATE,
-    QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_12,
-    QUALITATIVE_EXPECTATION_THRESHOLD_MONTH_36,
-)
+from src.stats_analysis import apply_statistical_test, create_dynamic_correlation_matrix
+from src.utils.constants import ANNUAL_INTEREST_RATE
 from src.utils.database import create_duckdb_database, table_exists
 from src.utils.helpers import combine_mean_std_dicts, combine_series, export_plot
-from src.utils.plotting import annotate_2d_histogram, create_performance_measures_table
 from utils.logging_config import get_logger
 
 # * Logging settings
@@ -58,9 +46,11 @@ pd.set_option("display.float_format", lambda x: "%.2f" % x)
 con_exp_1 = duckdb.connect(constants.EXP_1_DATABASE_FILE, read_only=False)
 con_exp_2 = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 
+DATA_FILE_PATH = Path(__file__).parents[1] / "data"
+
 # ! Export plots
 # export_all_plots = input("Export all plots? (y/n) ").lower() == "y"
-FILE_PATH = Path(__file__).parents[1] / "results"
+EXPORT_FILE_PATH = Path(__file__).parents[1] / "results"
 
 # %%
 QUESTIONNAIRE_COLS = [
@@ -144,9 +134,9 @@ CORRELATION_COLS = [
     "riskPreferences_choice_count",
 ]
 TREATMENT_GROUPS = [
-    "Intervention (Exp 1)",
-    "Intervention 1 (Exp 2)",
-    "Intervention 2 (Exp 2)",
+    "Intervention 1",
+    "Intervention 2",
+    "Intervention 3",
 ]
 LOGIT_COLS = [
     "decision_pattern_30_perception_accuracy_SN",
@@ -217,6 +207,35 @@ df_questionnaire[QUESTIONNAIRE_COLS].describe()
 
 # %% [markdown]
 ## Inflation estimations
+df_real_inflation = pd.read_csv(DATA_FILE_PATH / "France HICP_20251112134158.csv")
+df_real_inflation = df_real_inflation.drop(columns=["TIME PERIOD"])
+df_real_inflation["DATE"] = pd.to_datetime(df_real_inflation["DATE"])
+df_real_inflation = df_real_inflation.rename(
+    columns={
+        "HICP - Overall index - France (ICP.M.FR.N.000000.4.ANR)": "HICP (%)",
+        "DATE": "Date",
+    }
+)
+title_fontsize = 20
+label_fontsize = 16
+legend_fontsize = 14
+tick_fontsize = 12
+
+fig, ax = plt.subplots(figsize=(13, 5))
+sns.lineplot(data=df_real_inflation, x="Date", y="HICP (%)", ax=ax)
+ax.axvline(x=pd.to_datetime("2023-02-28"), color="r", linestyle="--", label="Exp 1")
+ax.axvline(x=pd.to_datetime("2024-05-31"), color="g", linestyle="--", label="Exp 2")
+ax.axhline(y=0, color="black", linestyle="-")
+ax.set_title("HICP (% Change) - France, Monthly", fontsize=title_fontsize)
+ax.set_xlabel("Date", fontsize=label_fontsize)
+ax.set_ylabel("HICP (%)", fontsize=label_fontsize)
+ax.tick_params(axis="x", labelsize=tick_fontsize)
+ax.tick_params(axis="y", labelsize=tick_fontsize)
+ax.legend(fontsize=legend_fontsize)
+plt.show()
+
+# %%
+
 df_inflation_estimates_1 = con_exp_1.sql("SELECT * FROM Inflation").df()
 df_inflation_estimates_1 = df_inflation_estimates_1[
     [
@@ -243,14 +262,14 @@ for measure in df_inflation_estimates.columns:
     result = apply_statistical_test(df_inflation_estimates, measure, "experiment", 1, 2)
     print(f"{measure} p-value: {result.pvalue}")
 
-results = df_inflation_estimates.groupby("experiment").describe(percentiles=[0.5])
+results = df_inflation_estimates.groupby("experiment").mean()
 
 print(
     """\n*Differences in inflation estimates between experiments are statically significant
 to the p<0.01 level, except for the estimate of the lowest inflation rate in the
 last 30 years.*"""
 )
-results[[c for c in results.columns if c[1] in ["mean", "std", "50%"]]].T
+results.T
 
 # %%
 df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con_exp_2, experiment=2)
@@ -863,7 +882,7 @@ df_regress_individual_chars = df_regress.copy()
 regressions = {}
 
 for m in ["sreal_percent"] + LOGIT_COLS[1:3]:
-    formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
+    formula = f"""{m} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
     if m in LOGIT_COLS:
@@ -935,7 +954,7 @@ learning_effect, _ = intervention.create_learning_effect_table(
         "decision_pattern_30_perception_accuracy_IA",
     ],
     p_value_threshold=[0.1, 0.05, 0.01],
-    decimal_places=2,
+    decimal_places=4,
 )
 learning_effect = learning_effect.set_index("")
 learning_effect
@@ -953,9 +972,9 @@ df_treat = df_treat[df_treat["participant.label"] != "JKmBvh7"]
 treatments_rename = {
     "control": "Control",
     "Control": "Control",
-    "intervention": "Intervention (Exp 1)",
-    "Intervention 1": "Intervention 1 (Exp 2)",
-    "Intervention 2": "Intervention 2 (Exp 2)",
+    "intervention": "Intervention 1",
+    "Intervention 1": "Intervention 2",
+    "Intervention 2": "Intervention 3",
 }
 
 df_treat["treatment"] = np.select(
@@ -985,20 +1004,7 @@ treatment_effect = treatment_effect.set_index("")
 treatment_effect
 
 # %% [markdown]
-### Diff-in-Diff with heterogeneous treatment effects: Individual characteristics
-# $$ Y_{it} = β₀ + β₁(Treat_i) + β₂(Post_t) + β₃(Characteristic_i) +
-#    β₄(Treat × Post) +
-#    β₅(Treat × Characteristic) +
-#    β₆(Post × Characteristic) +
-#    β₇(Treat × Post × Characteristic) +
-#    β₈(Y_{i0}) + ε_it
-# $$
-# Where:
-# - **β₄** = ATE of the intervention (main treatment effect)
-# - **β₇** = heterogeneous treatment effect (your key coefficient of interest)
-# - **$Y_{i0}$** = baseline outcome (for precision)
-
-# %%
+### ANCOVA of heterogeneous treatment effects: Individual characteristics
 df_diff = pd.pivot_table(
     df_treat[["participant.label", "phase", "treatment"] + CORRELATION_COLS[:7]],
     index=["participant.label", "treatment"],
@@ -1034,21 +1040,14 @@ df_diff.columns = [
 ]
 
 # %%
-treatments = [
-    "Intervention (Exp 1)",
-    "Intervention 1 (Exp 2)",
-    "Intervention 2 (Exp 2)",
-]
-
 regressions = {}
 for measure in CORRELATION_COLS[:7]:
-    print(measure)
     measure_sanitized = (
         measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
     )
     pre, post = f"{measure_sanitized}_pre", f"{measure_sanitized}_post"
     regressions[measure] = {}
-    for treatment in treatments:
+    for treatment in TREATMENT_GROUPS:
         for characteristic in CORRELATION_COLS[7:]:
             if characteristic in ["numeracy", "financial_literacy", "compound"]:
                 formula = f"""{post} ~ C(treatment)*C({characteristic}) + {pre}"""
@@ -1274,7 +1273,7 @@ df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
 regressions = {}
 
 for m in ["sreal_percent"] + LOGIT_COLS:
-    formula = f"""{m} ~ financial_literacy + numeracy + compound + n_switches\
+    formula = f"""{m} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
     if m in LOGIT_COLS:
