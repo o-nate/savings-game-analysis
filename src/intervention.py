@@ -123,7 +123,7 @@ def create_learning_effect_table(
         before, after, p_value = calculate_change_in_measure(data, m)
 
         # Apply percentage scaling if needed
-        if as_percentage:
+        if as_percentage and "sensitivity" not in m.lower():
             before = before * 100
             after = after * 100
             diff_value = after - before
@@ -188,7 +188,7 @@ def create_diff_in_diff_table(
         columns=["phase"],
     )
     df_pivot.reset_index(inplace=True)
-    header_column = {"": [m for i in measures for m in [i, "(std)"]]}
+    header_column = {"": [m for i in measures for m in [i, ""]]}
     results_columns = {t: [] for t in treatments}
     control_column = {control: []}
     diff_columns = {f"Diff {t}": [] for t in treatments}
@@ -200,7 +200,7 @@ def create_diff_in_diff_table(
             data[data["treatment"] == control], m
         )
         control_diff_value = control_after - control_before
-        if as_percentage:
+        if as_percentage and "sensitivity" not in m.lower():
             control_before = control_before * 100
             control_after = control_after * 100
             control_diff_value = control_diff_value * 100
@@ -211,7 +211,7 @@ def create_diff_in_diff_table(
         dict_for_dataframe[control].append(diff)
         ## Add standard deviation
         std_control = df_pivot[df_pivot["treatment"] == control][f"Change in {m}"].std()
-        if as_percentage:
+        if as_percentage and "sensitivity" not in m.lower():
             std_control = std_control * 100
         standard_deviation = str(round(std_control, decimal_places))
         dict_for_dataframe[control].append(f"({standard_deviation})")
@@ -226,7 +226,7 @@ def create_diff_in_diff_table(
 
             # Add p-value stars
             diff_in_diff_value = treatment_diff.mean() - control_diff.mean()
-            if as_percentage:
+            if as_percentage and "sensitivity" not in m.lower():
                 before = before * 100
                 after = after * 100
                 diff_in_diff_value = diff_in_diff_value * 100
@@ -240,7 +240,7 @@ def create_diff_in_diff_table(
 
             ## Add difference
             diff_value = after - before
-            if as_percentage:
+            if as_percentage and "sensitivity" not in m.lower():
                 diff_value = diff_value
             diff = str(round(diff_value, decimal_places))
             for pval in p_value_threshold:
@@ -249,7 +249,7 @@ def create_diff_in_diff_table(
 
             ## Add standard deviation
             std_treat = df_pivot[df_pivot["treatment"] == treat][f"Change in {m}"].std()
-            if as_percentage:
+            if as_percentage and "sensitivity" not in m.lower():
                 std_treat = std_treat * 100
             standard_deviation = str(round(std_treat, decimal_places))
             dict_for_dataframe[treat].append(f"({standard_deviation})")
