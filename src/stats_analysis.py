@@ -203,7 +203,7 @@ def create_bonferroni_correlation_table(
     data: pd.DataFrame,
     measures_1: list[str],
     measures_2: list[str],
-    correlation: str,
+    # correlation: str,
     decimal_places: int = 4,
     filtered_results: bool = True,
 ) -> tuple[pd.DataFrame, list[float]]:
@@ -228,24 +228,33 @@ def create_bonferroni_correlation_table(
         and list of raw p values
     """
     raw_pvals = []
-    if correlation == "pearson":
-        test = "Pearson correlation"
-    elif correlation == "pointbiserial":
-        test = "Point bi-serial"
-    else:
-        raise ValueError("""Please, indicate either `pearson` or `pointbiserial`.""")
-    print(f"Applying {test}")
-    corr_dict = {"measure": [], "task_measure": [], "correlation": [], "p_value": []}
+    # if correlation == "pearson":
+    #     test = "Pearson correlation"
+    # elif correlation == "pointbiserial":
+    #     test = "Point bi-serial"
+    # else:
+    #     raise ValueError("""Please, indicate either `pearson` or `pointbiserial`.""")
+    corr_dict = {
+        "measure": [],
+        "task_measure": [],
+        "correlation": [],
+        "p_value": [],
+        "reject": [],
+    }
 
     ## Create df with correlations to then apply a Bonferroni correction
     for m1 in measures_1:
         for m2 in measures_2:
-            if correlation == "pearson":
-                ## Pearson correlation for each measure test
-                corr = pearsonr(data[m1], data[m2])
-            else:
+            if m1 in ["numeracy", "financial_literacy", "compound"] or m2 in [
+                "numeracy",
+                "financial_literacy",
+                "compound",
+            ]:
                 ## Point bi-serial correlation for each measure test
                 corr = pointbiserialr(data[m1], data[m2])
+            else:
+                ## Pearson correlation for each measure test
+                corr = pearsonr(data[m1], data[m2])
             corr_dict["measure"].append(m1)
             corr_dict["task_measure"].append(m2)
             corr_dict["correlation"].append(corr[0])
