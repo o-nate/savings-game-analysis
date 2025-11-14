@@ -7,10 +7,9 @@ import duckdb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pingouin import mediation_analysis
 import seaborn as sns
 
-# from sklearn.preprocessing import OneHotEncoder
+from scipy.stats import pearsonr
 import statsmodels.formula.api as smf
 from statsmodels.iolib.summary2 import summary_col
 
@@ -67,6 +66,7 @@ QUESTIONNAIRE_COLS = [
 ]
 ACCURATE_PERCEPTIONS_THRESHOLD = 0.75
 ACCURATE_QUALITATIVE_THRESHOLD = 3
+PARTICIPANT_WITHOUT_BELIEF_DATA = "JKmBvh7"
 COLS = [
     "participant.code",
     "treatment",
@@ -139,6 +139,8 @@ TREATMENT_GROUPS = [
     "Intervention 3",
 ]
 LOGIT_COLS = [
+    "purchase_adaptation_30",
+    "perception_consistent_12",
     "decision_pattern_30_perception_accuracy_SN",
     "decision_pattern_30_perception_accuracy_SA",
     "decision_pattern_30_perception_accuracy_IN",
@@ -157,10 +159,31 @@ if not table_exists(con_exp_2, "Questionnaire"):
 
 # %% [markdown]
 ## Experiment 1
-df_questionnaire = con_exp_1.sql("SELECT * FROM Questionnaire").df()
+df_questionnaire_1 = con_exp_1.sql("SELECT * FROM Questionnaire").df()
 
-df_questionnaire[QUESTIONNAIRE_COLS].describe()
+df_questionnaire_1[QUESTIONNAIRE_COLS].describe()
 
+# %% [markdown]
+### Questionnaire - education levels
+df_questionnaire_1.value_counts("Questionnaire.1.player.educationLevel") / len(
+    df_questionnaire_1
+) * 100
+
+# %% [markdown]
+### Questionnaire - employment
+
+df_questionnaire_1.value_counts("Questionnaire.1.player.employmentStatus") / len(
+    df_questionnaire_1
+) * 100
+
+# %% [markdown]
+### Average final remuneration (with participant fee)
+df_pay = con_exp_1.sql("SELECT * FROM final_payments").df()
+df_pay = df_pay[
+    df_pay["participant.label"].isin(df_questionnaire_1["participant.label"])
+]
+assert len(df_pay) == len(df_questionnaire_1)
+float(df_pay["participant.payoff"].mean())
 
 # %%
 df_expectations = con_exp_1.sql("SELECT * FROM inf_expectation").df()
@@ -202,8 +225,33 @@ df_decisions_1["finalSavings_120"] = df_decisions_1.groupby("participant.code")[
 # %% [markdown]
 ## Experiment 2
 df_questionnaire = con_exp_2.sql("SELECT * FROM Questionnaire").df()
+df_questionnaire = df_questionnaire[
+    df_questionnaire["participant.label"] != PARTICIPANT_WITHOUT_BELIEF_DATA
+]
 
 df_questionnaire[QUESTIONNAIRE_COLS].describe()
+
+# %% [markdown]
+### Questionnaire - education levels
+df_questionnaire.value_counts("Questionnaire.1.player.educationLevel") / len(
+    df_questionnaire
+) * 100
+
+# %% [markdown]
+### Questionnaire - employment
+
+df_questionnaire.value_counts("Questionnaire.1.player.employmentStatus") / len(
+    df_questionnaire
+) * 100
+
+# %% [markdown]
+### Average final remuneration (with participant fee)
+df_pay = con_exp_2.sql("SELECT * FROM final_payments").df()
+df_pay = df_pay[df_pay["participant.label"].isin(df_questionnaire["participant.label"])]
+assert len(df_pay) == len(df_questionnaire)
+float(
+    df_pay["participant.payoff"].mean() / 750 + 5
+)  # Participant fee of €5 and conversion rate of 750 points/€
 
 # %% [markdown]
 ## Inflation estimations
@@ -249,6 +297,9 @@ df_inflation_estimates_1 = df_inflation_estimates_1[
 df_inflation_estimates_1["experiment"] = 1
 
 df_inflation_estimates_2 = con_exp_2.sql("SELECT * FROM Inflation").df()
+df_inflation_estimates_2 = df_inflation_estimates_2[
+    df_inflation_estimates_2["participant.label"] != PARTICIPANT_WITHOUT_BELIEF_DATA
+]
 df_inflation_estimates_2 = df_inflation_estimates_2[
     [c for c in df_inflation_estimates_2.columns if "infK_" in c]
 ]
@@ -320,6 +371,11 @@ df_decisions_2["exp"] = 2
 
 df_decisions_all = pd.concat([df_decisions_1, df_decisions_2]).reset_index()
 
+# * Drop participant who somehow did not have Quant Expectation or Perception in round 1
+df_decisions_all = df_decisions_all[
+    df_decisions_all["participant.label"] != PARTICIPANT_WITHOUT_BELIEF_DATA
+]
+
 # Add benchmark/naive strategies cumulative purchases
 df_decisions_all["cum_decision_optimal"] = df_decisions_all.groupby(
     ["participant.code", "participant.inflation"]
@@ -333,85 +389,85 @@ df_decisions_all.head()
 
 # %% [markdown]
 ## Savings Game parameters
-fig, axs = plt.subplots(2, 2, figsize=(25, 15))
+fig, axs = plt.subplots(1, 1, figsize=(10, 7))
 
 # Plot savings and stock on first subplot
 calc_opp_costs.plot_savings_and_stock(
     df_decisions_all[df_decisions_all["participant.inflation"] == 430],
     month_col="Month",
-    strategy_stock_cols=["cum_decision_optimal", "cum_decision_naive"],
+    strategy_stock_cols=["sgoptimal", "sgnaive"],
     strategy_savings_cols=["soptimal", "snaive"],
-    strategy_names=["Best", "Naïve"],
+    strategy_names=["Benchmark", "Naïve"],
     palette="tab10",
-    ax=axs[0][0],
+    ax=axs,
     set_ylim=True,
-    fontsize=20,
+    fontsize=16,
 )
 
-axs[0][0].set_xlabel("")
+axs.set_xlabel("Period", fontsize=16)
 
-axs[0][0].legend(loc="upper left", fontsize=20)
-axs[0][0].set_xticks(axs[0][0].get_xticks()[0:120:12])
+axs.legend(fontsize=16)
+axs.set_xticks(axs.get_xticks()[0:120:12])
 
-calc_opp_costs.plot_savings_and_stock(
-    df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
-    month_col="Month",
-    strategy_stock_cols=["cum_decision_optimal", "cum_decision_naive"],
-    strategy_savings_cols=["soptimal", "snaive"],
-    strategy_names=["Best", "Naïve"],
-    palette="tab10",
-    ax=axs[0][1],
-    set_ylim=True,
-    fontsize=20,
-)
+# calc_opp_costs.plot_savings_and_stock(
+#     df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
+#     month_col="Month",
+#     strategy_stock_cols=["sgoptimal", "sgnaive"],
+#     strategy_savings_cols=["soptimal", "snaive"],
+#     strategy_names=["Benchmark", "Naïve"],
+#     palette="tab10",
+#     ax=axs[0][1],
+#     set_ylim=True,
+#     fontsize=20,
+# )
 
-axs[0][1].set_xlabel("")
+# axs[0][1].set_xlabel("")
 
-axs[0][1].legend(loc="upper left", fontsize=20)
-axs[0][1].set_xticks(axs[0][1].get_xticks()[0:120:12])
+# axs[0][1].legend(loc="upper left", fontsize=20)
+# axs[0][1].set_xticks(axs[0][1].get_xticks()[0:120:12])
 
-# Plot inflation estimates on second subplot
-estimates = ["4x30"]
-df_inf_plot = df_survey.copy()
-df_inf_plot = df_inf_plot.replace("Actual", "4x30")
-df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
-sns.lineplot(
-    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
-    x="Month",
-    y="Estimate",
-    errorbar=None,
-    hue="Inflation sequence",
-    style="Inflation sequence",
-    ax=axs[1][0],
-)
+# # Plot inflation estimates on second subplot
+# estimates = ["4x30"]
+# df_inf_plot = df_survey.copy()
+# df_inf_plot = df_inf_plot.replace("Actual", "4x30")
+# df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+# sns.lineplot(
+#     data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+#     x="Month",
+#     y="Estimate",
+#     errorbar=None,
+#     hue="Inflation sequence",
+#     style="Inflation sequence",
+#     ax=axs[1][0],
+# )
 
-# Adjust titles and labels
-axs[1][0].set_xlabel("Month", labelpad=20, fontsize=20)
-axs[1][0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[1][0].legend(loc="upper left", fontsize=20)
+# # Adjust titles and labels
+# axs[1][0].set_xlabel("Month", labelpad=20, fontsize=20)
+# axs[1][0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+# axs[1][0].legend(loc="upper left", fontsize=20)
 
-estimates = ["10x12"]
-df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
-df_inf_plot = df_inf_plot.replace("Actual", "10x12")
-df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+# estimates = ["10x12"]
+# df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
+# df_inf_plot = df_inf_plot.replace("Actual", "10x12")
+# df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
 
-sns.lineplot(
-    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
-    x="Month",
-    y="Estimate",
-    errorbar=None,
-    hue="Inflation sequence",
-    style="Inflation sequence",
-    ax=axs[1][1],
-)
+# sns.lineplot(
+#     data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+#     x="Month",
+#     y="Estimate",
+#     errorbar=None,
+#     hue="Inflation sequence",
+#     style="Inflation sequence",
+#     ax=axs[1][1],
+# )
 
-# Adjust titles and labels
-axs[1][1].set_xlabel("Month", labelpad=20, fontsize=20)
-axs[1][1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[1][1].legend(loc="upper left", fontsize=20)
+# # Adjust titles and labels
+# axs[1][1].set_xlabel("Month", labelpad=20, fontsize=20)
+# axs[1][1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+# axs[1][1].legend(loc="upper left", fontsize=20)
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 
 # %% [markdown]
@@ -511,7 +567,7 @@ summary_std_dict = (
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 
-pd.DataFrame(combined_dict).style
+pd.DataFrame(combined_dict).sort_index(ascending=False).style
 
 # %% [markdown]
 ### Inflation beliefs
@@ -531,29 +587,48 @@ pd.DataFrame(combined_dict).style
 
 
 # %% [markdown]
-### Plots
-fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+### Performance plots
+fig, axs = plt.subplots(1, 1, figsize=(12, 7))
 
 # Plot savings and stock on first subplot
 calc_opp_costs.plot_savings_and_stock(
-    df_decisions_all[df_decisions_all["participant.inflation"] == 430],
+    df_decisions_all[
+        (df_decisions_all["participant.inflation"] == 430)
+        & (df_decisions_all["phase"] == "pre")
+    ],
     month_col="Month",
-    strategy_stock_cols=["cum_decision_optimal", "sgnaive", "cum_decision"],
+    strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
     strategy_savings_cols=["soptimal", "snaive", "sreal"],
-    strategy_names=["Best", "Naïve", "Average"],
+    strategy_names=["Benchmark", "Naïve", "Average"],
     palette="tab10",
-    ax=axs[0],
+    ax=axs,
     set_ylim=True,
-    fontsize=20,
+    fontsize=16,
 )
 
-axs[0].set_xlabel("")
+axs.set_xlabel("Period", fontsize=16)
 
-axs[0].legend(loc="upper left", fontsize=16)
-axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
+axs.legend(loc="upper center", fontsize=16)
+axs.set_xticks(axs.get_xticks()[0:120:12])
 
-# Plot inflation estimates on second subplot
+# %% [markdown]
+### Inflation beliefs plots
+xlabel_fontsize = 16
+ylabel_fontsize = 16
+legend_fontsize = 16
+
+fig, axs = plt.subplots(1, 1, figsize=(10, 7))
 estimates = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
+hue_order = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
+
+# Manually define colors using the tab10 palette
+color_palette = sns.color_palette("tab10")
+palette_dict = {
+    "Quant Expectation": color_palette[3],  # red
+    "Quant Perception": color_palette[2],  # green
+    "Actual": color_palette[0],  # blue
+    "Upcoming": color_palette[1],  # orange
+}
 sns.lineplot(
     data=df_survey[df_survey["Measure"].isin(estimates)],
     x="Month",
@@ -561,16 +636,43 @@ sns.lineplot(
     errorbar=None,
     hue="Measure",
     style="Measure",
-    ax=axs[1],
+    ax=axs,
+    palette=palette_dict,
+    hue_order=hue_order,
 )
 
 # Adjust titles and labels
-axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
-axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[1].legend(loc="upper left", fontsize=16)
+axs.set_xlabel("Period", fontsize=xlabel_fontsize)
+axs.set_ylabel("Inflation rate (%)", labelpad=20, fontsize=ylabel_fontsize)
+
+# Manually define legend labels
+handles, _ = axs.get_legend_handles_labels()
+# New labels corresponding to the hue_order
+new_labels = ["Perceived", "Expected", "Actual", "Upcoming"]
+axs.legend(
+    handles=handles,
+    labels=new_labels,
+    loc="upper left",
+    fontsize=legend_fontsize,
+)
 
 plt.tight_layout()
 plt.show()
+
+# %% [markdown]
+### Correlation: perceptions and expectations
+data = df_decisions_all[
+    (df_decisions_all["participant.inflation"] == 430)
+    & (df_decisions_all["phase"] == "pre")
+    & (df_decisions_all["Month"] >= 12)
+    & (df_decisions_all["Quant Perception"].notna())
+    & (df_decisions_all["Quant Expectation"].notna())
+]
+correlation, p_value = pearsonr(data["Quant Perception"], data["Quant Expectation"])
+
+print(
+    f"Correlation between Quant Perception and Quant Expectation: {correlation:.3f} (p-value: {p_value:.10f})"
+)
 
 # %% [markdown]
 ## Test difference between experiments
@@ -870,6 +972,7 @@ df_regress = pd.get_dummies(
 df_regress = df_regress.rename(
     columns={
         "sreal_%": "sreal_percent",
+        "Quant Perception_consistent_12": "perception_consistent_12",
         "Quant Perception_pattern_12_AC": "perception_pattern_12_AC",
         "Quant Perception_pattern_12_AI": "perception_pattern_12_AI",
         "Quant Perception_pattern_12_IC": "perception_pattern_12_IC",
@@ -881,7 +984,7 @@ df_regress_individual_chars = df_regress.copy()
 # %%
 regressions = {}
 
-for m in ["sreal_percent"] + LOGIT_COLS[1:3]:
+for m in ["sreal_percent"] + LOGIT_COLS[:2] + LOGIT_COLS[3:5]:
     formula = f"""{m} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
@@ -966,7 +1069,6 @@ df_treat = df_decisions_all[
     & (df_decisions_all["Month"] == 120)
 ]
 
-# * Drop participant who somehow did not have Quant Expectation in round 1
 df_treat = df_treat[df_treat["participant.label"] != "JKmBvh7"]
 
 treatments_rename = {
@@ -1270,6 +1372,10 @@ df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
 # %% [markdown]
 ### OLS/Logistic regression of performance and decision patterns on behavioral variables (complete)
 
+df_regress_individual_chars = df_regress_individual_chars.rename(
+    columns={"Quant Perception_consistent_12": "perception_consistent_12"}
+)
+
 regressions = {}
 
 for m in ["sreal_percent"] + LOGIT_COLS:
@@ -1357,3 +1463,13 @@ results = summary_col(
     model_names=list(regressions.keys()),
 )
 results
+
+# %%
+from src.stats_analysis import create_bonferroni_correlation_table
+
+create_bonferroni_correlation_table(
+    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
+    CORRELATION_COLS[7:],
+    CORRELATION_COLS[:7],
+    # filtered_results=False,
+)
