@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import statsmodels.formula.api as smf
 
 from scipy.stats import pearsonr
-import statsmodels.formula.api as smf
 from statsmodels.iolib.summary2 import summary_col
 
 from scripts.utils import constants
@@ -426,48 +426,54 @@ axs.set_xticks(axs.get_xticks()[0:120:12])
 # axs[0][1].legend(loc="upper left", fontsize=20)
 # axs[0][1].set_xticks(axs[0][1].get_xticks()[0:120:12])
 
-# # Plot inflation estimates on second subplot
-# estimates = ["4x30"]
-# df_inf_plot = df_survey.copy()
-# df_inf_plot = df_inf_plot.replace("Actual", "4x30")
-# df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
-# sns.lineplot(
-#     data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
-#     x="Month",
-#     y="Estimate",
-#     errorbar=None,
-#     hue="Inflation sequence",
-#     style="Inflation sequence",
-#     ax=axs[1][0],
-# )
+# Plot inflation estimates on second subplot
 
-# # Adjust titles and labels
-# axs[1][0].set_xlabel("Month", labelpad=20, fontsize=20)
-# axs[1][0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-# axs[1][0].legend(loc="upper left", fontsize=20)
+# %%
+fig, axs = plt.subplots(2, 1, figsize=(12, 10))
 
-# estimates = ["10x12"]
-# df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
-# df_inf_plot = df_inf_plot.replace("Actual", "10x12")
-# df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+estimates = ["4x30"]
+df_inf_plot = df_survey.copy()
+df_inf_plot = df_inf_plot.replace("Actual", "4x30")
+df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+sns.lineplot(
+    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Inflation sequence",
+    style="Inflation sequence",
+    ax=axs[0],
+)
 
-# sns.lineplot(
-#     data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
-#     x="Month",
-#     y="Estimate",
-#     errorbar=None,
-#     hue="Inflation sequence",
-#     style="Inflation sequence",
-#     ax=axs[1][1],
-# )
+# Adjust titles and labels
+axs[0].set_title("4x30 sequence", fontsize=20)
+axs[0].set_xlabel("", labelpad=20, fontsize=20)
+axs[0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[0].legend('', frameon=False)
 
-# # Adjust titles and labels
-# axs[1][1].set_xlabel("Month", labelpad=20, fontsize=20)
-# axs[1][1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-# axs[1][1].legend(loc="upper left", fontsize=20)
+estimates = ["10x12"]
+df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
+df_inf_plot = df_inf_plot.replace("Actual", "10x12")
+df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+
+sns.lineplot(
+    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Inflation sequence",
+    style="Inflation sequence",
+    ax=axs[1],
+)
+
+# Adjust titles and labels
+axs[1].set_title("10x12 sequence", fontsize=20)
+axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
+axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[1].legend('', frameon=False)
 
 # plt.tight_layout()
-# plt.show()
+plt.show()
 
 
 # %% [markdown]
