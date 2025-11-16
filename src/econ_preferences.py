@@ -71,7 +71,7 @@ def count_switches(data: pd.DataFrame, econ_preference: str) -> pd.Series:
 def count_wisconsin_errors(
     data: pd.DataFrame, error_type: str, num_trials: int = 30
 ) -> pd.Series:
-    """Count number of perseverative or set-loss erros from Wisconsin Card Sorting Task.
+    """Count number of perseverative or set-loss errors from Wisconsin Card Sorting Task.
     Perseverative errors are failures to adapt decisions to negative feedback. Set-loss
     errors are failures to maintain a decision, given positive feedback.
 

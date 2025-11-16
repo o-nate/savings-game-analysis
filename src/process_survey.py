@@ -40,6 +40,35 @@ def calculate_estimate_bias(
     return data[estimate_col] - data[real_inflation_col]
 
 
+def separate_inflation_bias_by_phase(data: pd.DataFrame) -> pd.DataFrame:
+    data["inf_phase"] = np.where(
+        data["inf_phase"] == 1,
+        "high",
+        "low",
+    )
+
+    df_bias = pd.pivot_table(
+        data=data[
+            [
+                "participant.code",
+                "inf_phase",
+                "Perception_bias",
+                "Expectation_bias",
+            ]
+        ],
+        index=["participant.code"],
+        columns="inf_phase",
+    )
+    df_bias = df_bias.reset_index()
+    df_bias.columns = df_bias.columns.map("_".join)
+    df_bias.reset_index(inplace=True)
+    df_bias.head()
+
+    df_bias.rename(columns={"participant.code_": "participant.code"}, inplace=True)
+
+    return data.merge(df_bias, how="left")
+
+
 def calculate_estimate_sensitivity(
     data: pd.DataFrame,
     estimate_col: str,
