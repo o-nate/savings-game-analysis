@@ -206,7 +206,7 @@ def create_bonferroni_correlation_table(
     # correlation: str,
     decimal_places: int = 4,
     filtered_results: bool = True,
-) -> tuple[pd.DataFrame, list[float]]:
+) -> pd.DataFrame:
     """Create table with Bonferroni-corrected correlations
 
     Args:
@@ -239,7 +239,6 @@ def create_bonferroni_correlation_table(
         "task_measure": [],
         "correlation": [],
         "p_value": [],
-        "reject": [],
     }
 
     ## Create df with correlations to then apply a Bonferroni correction
@@ -260,6 +259,9 @@ def create_bonferroni_correlation_table(
             corr_dict["correlation"].append(corr[0])
             corr_dict["p_value"].append(corr[1])
             raw_pvals.append(corr[1])
+            logger.debug(
+                "Array lengths: %s", [(k, len(v)) for k, v in corr_dict.items()]
+            )
 
     df_corr = pd.DataFrame(corr_dict)
 
@@ -271,6 +273,7 @@ def create_bonferroni_correlation_table(
         is_sorted=False,
         returnsorted=False,
     )
+    df_corr["rejected"] = rejected
     print(
         f"Reject null hypothesis for {np.sum(rejected)} of {len(df_corr)} tests.\t",
         f"Corrected alpha: {alpha_corrected}",

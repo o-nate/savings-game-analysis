@@ -1,6 +1,7 @@
 """Present results from both experiments"""
 
 # %%
+import time
 from pathlib import Path
 
 import duckdb
@@ -23,9 +24,13 @@ from src import (
     knowledge,
     process_survey,
 )
-from src.utils import exp_1_patches
+from src.utils import ancova_restructurer, exp_1_patches
 
-from src.stats_analysis import apply_statistical_test, create_dynamic_correlation_matrix
+from src.stats_analysis import (
+    apply_statistical_test,
+    create_bonferroni_correlation_table,
+    create_dynamic_correlation_matrix,
+)
 from src.utils.constants import ANNUAL_INTEREST_RATE
 from src.utils.database import create_duckdb_database, table_exists
 from src.utils.helpers import combine_mean_std_dicts, combine_series, export_plot
@@ -254,6 +259,21 @@ float(
 )  # Participant fee of €5 and conversion rate of 750 points/€
 
 # %% [markdown]
+### Demographics of combined experiments
+df_demographics = pd.concat(
+    [df_questionnaire_1[QUESTIONNAIRE_COLS], df_questionnaire[QUESTIONNAIRE_COLS]]
+).reset_index()
+df_demographics = df_demographics.drop(columns="index")
+
+for demographic in [
+    "Questionnaire.1.player.educationLevel",
+    "Questionnaire.1.player.employmentStatus",
+]:
+    print(df_demographics.value_counts(demographic) / len(df_demographics) * 100, "\n")
+
+df_demographics.describe()
+
+# %% [markdown]
 ## Inflation estimations
 df_real_inflation = pd.read_csv(DATA_FILE_PATH / "France HICP_20251112134158.csv")
 df_real_inflation = df_real_inflation.drop(columns=["TIME PERIOD"])
@@ -449,7 +469,7 @@ sns.lineplot(
 axs[0].set_title("4x30 sequence", fontsize=20)
 axs[0].set_xlabel("", labelpad=20, fontsize=20)
 axs[0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[0].legend('', frameon=False)
+axs[0].legend("", frameon=False)
 
 estimates = ["10x12"]
 df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
@@ -470,7 +490,7 @@ sns.lineplot(
 axs[1].set_title("10x12 sequence", fontsize=20)
 axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
 axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[1].legend('', frameon=False)
+axs[1].legend("", frameon=False)
 
 # plt.tight_layout()
 plt.show()
@@ -1112,64 +1132,6 @@ treatment_effect = treatment_effect.set_index("")
 treatment_effect
 
 # %% [markdown]
-### ANCOVA of heterogeneous treatment effects: Individual characteristics
-df_diff = pd.pivot_table(
-    df_treat[["participant.label", "phase", "treatment"] + CORRELATION_COLS[:7]],
-    index=["participant.label", "treatment"],
-    columns=["phase"],
-)
-df_diff.reset_index(inplace=True)
-for m in CORRELATION_COLS[:7]:
-    df_diff[f"change_{m}"] = df_diff[(m, "post")] - df_diff[(m, "pre")]
-
-# Combine column names if the second level is not blank
-df_diff.columns = df_diff.columns.map(
-    lambda col: (
-        col[0]
-        if isinstance(col, tuple)
-        and (len(col) < 2 or col[1] is None or str(col[1]).strip() == "")
-        else "_".join(col) if isinstance(col, tuple) else col
-    )
-)
-
-df_diff = df_diff.merge(
-    df_behavioral[df_behavioral["Month"] == 120][
-        ["participant.label"] + CORRELATION_COLS[7:]
-    ],
-    how="left",
-)
-
-df_diff.columns = [
-    col.replace("%", "percent") if isinstance(col, str) else col
-    for col in df_diff.columns
-]
-df_diff.columns = [
-    col.replace(" ", "_") if isinstance(col, str) else col for col in df_diff.columns
-]
-
-# %%
-regressions = {}
-for measure in CORRELATION_COLS[:7]:
-    measure_sanitized = (
-        measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
-    )
-    pre, post = f"{measure_sanitized}_pre", f"{measure_sanitized}_post"
-    regressions[measure] = {}
-    for treatment in TREATMENT_GROUPS:
-        for characteristic in CORRELATION_COLS[7:]:
-            if characteristic in ["numeracy", "financial_literacy", "compound"]:
-                formula = f"""{post} ~ C(treatment)*C({characteristic}) + {pre}"""
-            else:
-                formula = f"""{post} ~ C(treatment)*{characteristic} + {pre}"""
-
-            model = smf.ols(
-                formula=formula,
-                data=df_diff,
-            )
-            regressions[measure][characteristic] = model.fit()
-
-
-# %% [markdown]
 ## Appendix E
 # %% [markdown]
 ### Overall performance
@@ -1376,6 +1338,15 @@ df_corr = create_dynamic_correlation_matrix(
 df_corr[df_corr.index.isin(CORRELATION_COLS[7:])][CORRELATION_COLS[:7]]
 
 # %% [markdown]
+### Results of Bonferroni correction
+create_bonferroni_correlation_table(
+    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
+    CORRELATION_COLS[7:],
+    CORRELATION_COLS[:7],
+    filtered_results=False,
+)
+
+# %% [markdown]
 ### OLS/Logistic regression of performance and decision patterns on behavioral variables (complete)
 
 df_regress_individual_chars = df_regress_individual_chars.rename(
@@ -1451,6 +1422,40 @@ learning_effect
 
 # %%
 ### ANCOVA: Intervention effects
+df_diff = pd.pivot_table(
+    df_treat[["participant.label", "phase", "treatment"] + CORRELATION_COLS[:7]],
+    index=["participant.label", "treatment"],
+    columns=["phase"],
+)
+df_diff.reset_index(inplace=True)
+for m in CORRELATION_COLS[:7]:
+    df_diff[f"change_{m}"] = df_diff[(m, "post")] - df_diff[(m, "pre")]
+
+# Combine column names if the second level is not blank
+df_diff.columns = df_diff.columns.map(
+    lambda col: (
+        col[0]
+        if isinstance(col, tuple)
+        and (len(col) < 2 or col[1] is None or str(col[1]).strip() == "")
+        else "_".join(col) if isinstance(col, tuple) else col
+    )
+)
+
+df_diff = df_diff.merge(
+    df_behavioral[df_behavioral["Month"] == 120][
+        ["participant.label"] + CORRELATION_COLS[7:]
+    ],
+    how="left",
+)
+
+df_diff.columns = [
+    col.replace("%", "percent") if isinstance(col, str) else col
+    for col in df_diff.columns
+]
+df_diff.columns = [
+    col.replace(" ", "_") if isinstance(col, str) else col for col in df_diff.columns
+]
+
 regressions = {}
 for measure in CORRELATION_COLS[:7]:
     measure_sanitized = (
@@ -1468,14 +1473,55 @@ results = summary_col(
     stars=True,
     model_names=list(regressions.keys()),
 )
+
 results
 
-# %%
-from src.stats_analysis import create_bonferroni_correlation_table
+# %% [markdown]
+### ANCOVA of heterogeneous treatment effects: Individual characteristics
 
-create_bonferroni_correlation_table(
-    df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
-    CORRELATION_COLS[7:],
-    CORRELATION_COLS[:7],
-    # filtered_results=False,
+regressions = {}
+for measure in CORRELATION_COLS[:7]:
+    measure_sanitized = (
+        measure.replace("%", "percent") if "%" in measure else measure.replace(" ", "_")
+    )
+    pre, post = f"{measure_sanitized}_pre", f"{measure_sanitized}_post"
+    regressions[measure] = {}
+    for treatment in TREATMENT_GROUPS:
+        for characteristic in CORRELATION_COLS[7:]:
+            if characteristic in ["numeracy", "financial_literacy", "compound"]:
+                formula = f"""{post} ~ C(treatment)*C({characteristic}) + {pre}"""
+            else:
+                formula = f"""{post} ~ C(treatment)*{characteristic} + {pre}"""
+
+            model = smf.ols(
+                formula=formula,
+                data=df_diff,
+            )
+            regressions[measure][characteristic] = model.fit()
+
+results_tables = {}
+for measure in CORRELATION_COLS[:7]:
+    results = summary_col(
+        results=list(regressions[measure].values()),
+        stars=True,
+        model_names=list(regressions[measure].keys()),
+    )
+    results_tables[measure] = results
+
+timestr = time.strftime("%Y%m%d-%H%M%S")
+with pd.ExcelWriter(
+    EXPORT_FILE_PATH / f"ancova_heterogeneous_effects_{timestr}.xlsx"
+) as writer:
+    for measure, results_table in results_tables.items():
+        df_to_write = results_table.tables[0]
+        sanitized_measure = measure.replace("%", "pct").replace(" ", "_")[:31]
+        df_to_write.to_excel(writer, sheet_name=sanitized_measure)
+
+logger.info("Exported ANCOVA results to Excel. Now, condensing results for display.")
+
+input_file = EXPORT_FILE_PATH / f"ancova_heterogeneous_effects_{timestr}.xlsx"
+output_file = (
+    EXPORT_FILE_PATH / f"ancova_heterogeneous_effects_condensed_{timestr}.xlsx"
 )
+
+ancova_restructurer.restructure_excel_file(input_file, output_file)
