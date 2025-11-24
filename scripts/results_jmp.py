@@ -521,7 +521,7 @@ summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
+    .groupby(["participant.inflation"])[PERFORMANCE_COLS]
     .describe()[[(c, "mean") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
@@ -529,7 +529,7 @@ summary_std = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
+    .groupby(["participant.inflation"])[PERFORMANCE_COLS]
     .describe()[[(c, "std") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
@@ -559,8 +559,8 @@ summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
 # summary["Day"] = summary["Day"].astype(int)
 
 summary_dict = (
-    summary.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[2:5]]]
+    summary.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[1:5]]]
     .to_dict()
 )
 
@@ -589,24 +589,24 @@ summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10
 # summary_std["Day"] = summary_std["Day"].astype(int)
 
 summary_std_dict = (
-    summary_std.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[2:5]]]
+    summary_std.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[1:5]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 
-pd.DataFrame(combined_dict).sort_index(ascending=True).style
+pd.DataFrame(combined_dict).sort_index(ascending=False).style
 
 # %% [markdown]
 ### Inflation beliefs
 summary_dict = (
-    summary.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[6:]]]
+    summary.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[5:]]]
     .to_dict()
 )
 summary_std_dict = (
-    summary_std.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[6:]]]
+    summary_std.groupby(["Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[5:]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
@@ -616,30 +616,35 @@ pd.DataFrame(combined_dict).style
 
 # %% [markdown]
 ### Performance plots
-fig, axs = plt.subplots(3, 2, figsize=(30, 20))
+fig, axs = plt.subplots(1, 1, figsize=(12, 7))
 
-color_palette = sns.color_palette("tab10")
-performance_palette_dict = {
-    "Average": color_palette[0],
-    "Benchmark": color_palette[2],
-    "Naïve": color_palette[1],
-}
-inflation_palette_dict = {
-    "Quant Expectation": "#87CEEB",  # sky blue
-    "Quant Perception": "#000080",  # navy blue
-    "Actual": "#800020",  # burgundy
-    "Upcoming": "#CD5C5C",  # Indian red
-}
+# Plot savings and stock on first subplot
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[
+        (df_decisions_all["participant.inflation"] == 430)
+        & (df_decisions_all["phase"] == "pre")
+    ],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+    strategy_savings_cols=["soptimal", "snaive", "sreal"],
+    strategy_names=["Benchmark", "Naïve", "Average"],
+    palette="tab10",
+    ax=axs,
+    set_ylim=True,
+    fontsize=16,
+)
 
-estimates = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
-hue_order = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
+axs.set_xlabel("Period", fontsize=16)
 
-sequences = [(1012, 1), (430, 1), (430, 2)]
+axs.legend(loc="upper center", fontsize=16)
+axs.set_xticks(axs.get_xticks()[0:120:12])
 
+# %% [markdown]
+### Inflation beliefs plots
 df_beliefs = pd.concat(
     [
         df_survey,
-        df_survey_1[
+        df_survey_1[df_survey_1["Measure"] != "Actual"][
             [
                 "participant.code",
                 "participant.label",
@@ -655,80 +660,6 @@ df_beliefs = pd.concat(
     ]
 )
 
-df_beliefs["participant.inflation"] = np.where(
-    df_beliefs["participant.inflation"] == "4x30", 430, 1012
-)
-
-# Plot savings and stock on left-hand subplots
-for i, sequence in enumerate(sequences):
-    inflation, exp = sequence
-    calc_opp_costs.plot_savings_and_stock(
-        df_decisions_all[
-            (df_decisions_all["participant.inflation"] == inflation)
-            & (df_decisions_all["exp"] == exp)
-            & (df_decisions_all["phase"] == "pre")
-        ],
-        month_col="Month",
-        strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
-        strategy_savings_cols=["soptimal", "snaive", "sreal"],
-        strategy_names=["Benchmark", "Naïve", "Average"],
-        palette=performance_palette_dict,
-        ax=axs[i][0],
-        set_ylim=True,
-        fontsize=16,
-    )
-    sns.lineplot(
-        data=df_beliefs[
-            (df_beliefs["Measure"].isin(estimates))
-            & (df_beliefs["participant.inflation"] == inflation)
-            & (df_beliefs["exp"] == exp)
-        ],
-        x="Month",
-        y="Estimate",
-        errorbar=None,
-        hue="Measure",
-        style="Measure",
-        ax=axs[i][1],
-        palette=inflation_palette_dict,
-        hue_order=hue_order,
-    )
-    axs[i][1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=16)
-    axs[i][0].set_xticks(axs[i][0].get_xticks()[0:120:12])
-    if i < 2:
-        axs[i][0].set_xlabel("", fontsize=16)
-        axs[i][1].set_xlabel("", fontsize=16)
-    else:
-        axs[i][0].set_xlabel("Period", fontsize=16)
-        axs[i][1].set_xlabel("Period", fontsize=16)
-    if i != 0:
-        axs[i][0].legend("", frameon=False)
-        axs[i][1].legend("", frameon=False)
-
-
-axs[0][0].legend(
-    loc="upper center",
-    bbox_to_anchor=(0.5, 1.15),
-    ncol=3,
-    fancybox=True,
-    shadow=True,
-    fontsize=16,
-)
-axs[0][1].legend(
-    loc="upper center",
-    bbox_to_anchor=(0.5, 1.22),
-    ncol=2,
-    fancybox=True,
-    shadow=True,
-    fontsize=16,
-)
-
-axs[2][0].set_xlabel("Period", fontsize=16)
-
-# plt.tight_layout()
-plt.show()
-
-# %% [markdown]
-### Inflation beliefs plots
 xlabel_fontsize = 16
 ylabel_fontsize = 16
 legend_fontsize = 16
@@ -750,7 +681,7 @@ sns.lineplot(
         (df_beliefs["Measure"].isin(estimates))
         & (df_beliefs["participant.inflation"] == "4x30")
         & (df_beliefs["participant.round"] == 1)
-    ],
+    ].reset_index(drop=True),
     x="Month",
     y="Estimate",
     errorbar=None,

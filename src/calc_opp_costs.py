@@ -152,6 +152,7 @@ def plot_savings_and_stock(
     strategy_stock_cols: list[str],
     strategy_savings_cols: list[str],
     strategy_names: list[str],
+    palette: str | dict = "tab10",
     ax: plt.Axes = None,
     set_ylim: bool = True,
     **kwargs,
@@ -164,6 +165,7 @@ def plot_savings_and_stock(
         strategy_stock_cols (list[str]): list of strategy stock columns
         strategy_savings_cols (list[str]): list of strategy savings columns
         strategy_names (list[str]): list of strategy of names to display for each strategy
+        palette (str, optional): Color palette for the plot. Defaults to "tab10".
         ax (plt.Axes, optional): Axis to plot on. If None, creates a new figure. Defaults to None.
         set_ylim (bool, optional): Whether to set y-axis limits. Defaults to True.
 
@@ -202,6 +204,9 @@ def plot_savings_and_stock(
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 7))
 
+    if isinstance(palette, dict) and isinstance(list(palette.values())[0], str):
+        palette = sns.color_palette(palette)
+
     # Plot bar plot on primary y-axis
     sns.barplot(
         data=dfts,
@@ -211,7 +216,7 @@ def plot_savings_and_stock(
         ax=ax,
         estimator="mean",
         errorbar=None,
-        palette=kwargs.get("palette", "tab10"),
+        palette=palette,
     )
 
     # Create secondary y-axis
@@ -226,7 +231,7 @@ def plot_savings_and_stock(
         ax=ax2,
         legend=None,
         ci=None,
-        palette=kwargs.get("palette", "tab10"),
+        palette=palette,
     )
 
     # Set y-axis labels with proper positioning
