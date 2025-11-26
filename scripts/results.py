@@ -616,7 +616,7 @@ pd.DataFrame(combined_dict).style
 
 # %% [markdown]
 ### Performance plots
-fig, axs = plt.subplots(3, 2, figsize=(30, 20))
+fig, axs = plt.subplots(3, 2, figsize=(27, 20))
 
 color_palette = sns.color_palette("tab10")
 performance_palette_dict = {
@@ -1446,11 +1446,15 @@ create_bonferroni_correlation_table(
 df_regress_individual_chars = df_regress_individual_chars.rename(
     columns={"Quant Perception_consistent_12": "perception_consistent_12"}
 )
+df_regress_individual_chars = df_regress_individual_chars.rename(
+    columns={col: col.replace("%", "percent") for col in PERFORMANCE_COLS}
+)
 
 regressions = {}
 
-for m in ["sreal_percent"] + LOGIT_COLS:
-    formula = f"""{m} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
+for m in PERFORMANCE_COLS + LOGIT_COLS:
+    m_ = m.replace("%", "percent") if "%" in m else m
+    formula = f"""{m_} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
     if m in LOGIT_COLS:

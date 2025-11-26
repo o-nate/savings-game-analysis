@@ -41,14 +41,15 @@ def calculate_estimate_bias(
 
 
 def separate_inflation_bias_by_phase(data: pd.DataFrame) -> pd.DataFrame:
-    data["inf_phase"] = np.where(
-        data["inf_phase"] == 1,
+    _df = data.copy()
+    _df["inf_phase"] = np.where(
+        _df["inf_phase"] == 1,
         "high",
         "low",
     )
 
     df_bias = pd.pivot_table(
-        data=data[
+        data=_df[
             [
                 "participant.code",
                 "inf_phase",
