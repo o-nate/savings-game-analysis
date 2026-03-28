@@ -46,7 +46,10 @@ def combine_series(dataframes: List[pd.DataFrame], **kwargs) -> pd.DataFrame:
 
 
 def export_plot(
-    exported_file_path: Path, file_name: str, export_all_plots: str = "n"
+    exported_file_path: Path,
+    file_name: str,
+    export_all_plots: str = "n",
+    **kwargs,
 ) -> None:
     """Export plot to results folder in png format
 
@@ -57,8 +60,10 @@ def export_plot(
     """
     file_path = exported_file_path / file_name
     if export_all_plots == "y":
-        plt.savefig(file_path, bbox_inches="tight")
+        plt.savefig(file_path, bbox_inches="tight", **kwargs)
+        logger.info(f"Plot exported to {file_path}")
     elif export_all_plots != "n":
         return
     elif input(f"Export {file_name}? (y) ").lower() == "y":
-        plt.savefig(file_path, bbox_inches="tight")
+        plt.savefig(file_path, bbox_inches="tight", **kwargs)
+        logger.info(f"Plot exported to {file_path}")

@@ -1551,3 +1551,32 @@ output_file = (
 
 if input("Export condensed ANCOVA results? (y/n): ").lower() == "y":
     ancova_restructurer.restructure_excel_file(input_file, output_file)
+
+# %% [markdown]
+### Regression of performance per classification
+
+df_regress_individual_chars = df_regress_individual_chars.rename(
+    columns={"Quant Perception_consistent_12": "perception_consistent_12"}
+)
+
+df = df_regress_individual_chars[df_regress_individual_chars["Month"] == 120].copy()
+df["sensitive"] = df_regress_individual_chars["Perception_sensitivity"] > 0.75
+df["adaptive"] = df_regress_individual_chars["purchase_adaptation_30"]
+
+regressions = {}
+
+model = smf.ols("sreal_percent ~ C(sensitive) * C(adaptive)", data=df)
+
+regressions["sreal_percent"] = model.fit()
+# print(model.summary())
+
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+
+results
+
+# %% [markdown]
+#

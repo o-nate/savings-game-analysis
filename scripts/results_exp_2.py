@@ -71,7 +71,7 @@ df_questionnaire[
 ## Behavior in the Savings Game
 ### Overall performance
 df_opp_cost = calc_opp_costs.calculate_opportunity_costs(con, experiment=2)
-calc_opp_costs.plot_savings_and_stock(df_opp_cost, col="phase", palette="tab10")
+# calc_opp_costs.plot_savings_and_stock(df_opp_cost, col="phase", palette="tab10")
 
 
 # %% [markdown]
@@ -446,8 +446,10 @@ export_plot(FILE_PATH, "uncertainty_time_series.png", export_all_plots=export_al
 
 # %% [markdown]
 ## The role of individual characteristics and behavior
-df_knowledge = knowledge.create_knowledge_dataframe()
-df_econ_preferences = econ_preferences.create_econ_preferences_dataframe()
+df_knowledge = knowledge.create_knowledge_dataframe(db_connection=con)
+df_econ_preferences = econ_preferences.create_econ_preferences_dataframe(
+    db_connection=con
+)
 df_individual_char = combine_series(
     [df_inf_measures, df_knowledge, df_econ_preferences],
     how="left",
@@ -606,7 +608,7 @@ df_treatments = intervention.create_diff_in_diff_table(
     data,
     constants.PERFORMANCE_MEASURES,
     constants.TREATMENTS,
-    constants.P_VALUE_THRESHOLDS,
+    p_value_threshold=constants.P_VALUE_THRESHOLDS,
 )
 df_treatments
 

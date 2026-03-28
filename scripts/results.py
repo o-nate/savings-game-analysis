@@ -53,7 +53,7 @@ con_exp_2 = duckdb.connect(constants.EXP_2_DATABASE_FILE, read_only=False)
 DATA_FILE_PATH = Path(__file__).parents[1] / "data"
 
 # ! Export plots
-# export_all_plots = input("Export all plots? (y/n) ").lower() == "y"
+export_all_plots = input("Export all plots? (y/n) ").lower()
 EXPORT_FILE_PATH = Path(__file__).parents[1] / "results"
 
 # %%
@@ -274,35 +274,6 @@ for demographic in [
 
 df_demographics.describe()
 
-# %% [markdown]
-## Inflation estimations
-df_real_inflation = pd.read_csv(DATA_FILE_PATH / "France HICP_20251112134158.csv")
-df_real_inflation = df_real_inflation.drop(columns=["TIME PERIOD"])
-df_real_inflation["DATE"] = pd.to_datetime(df_real_inflation["DATE"])
-df_real_inflation = df_real_inflation.rename(
-    columns={
-        "HICP - Overall index - France (ICP.M.FR.N.000000.4.ANR)": "HICP (%)",
-        "DATE": "Date",
-    }
-)
-title_fontsize = 20
-label_fontsize = 16
-legend_fontsize = 14
-tick_fontsize = 12
-
-fig, ax = plt.subplots(figsize=(13, 5))
-sns.lineplot(data=df_real_inflation, x="Date", y="HICP (%)", ax=ax)
-ax.axvline(x=pd.to_datetime("2023-02-28"), color="r", linestyle="--", label="Exp 1")
-ax.axvline(x=pd.to_datetime("2024-05-31"), color="g", linestyle="--", label="Exp 2")
-ax.axhline(y=0, color="black", linestyle="-")
-ax.set_title("HICP (% Change) - France, Monthly", fontsize=title_fontsize)
-ax.set_xlabel("Date", fontsize=label_fontsize)
-ax.set_ylabel("HICP (%)", fontsize=label_fontsize)
-ax.tick_params(axis="x", labelsize=tick_fontsize)
-ax.tick_params(axis="y", labelsize=tick_fontsize)
-ax.legend(fontsize=legend_fontsize)
-plt.show()
-
 # %%
 
 df_inflation_estimates_1 = con_exp_1.sql("SELECT * FROM Inflation").df()
@@ -408,98 +379,103 @@ df_decisions_all["cum_decision_naive"] = df_decisions_all.groupby(
 
 df_decisions_all.head()
 
-
 # %% [markdown]
-## Savings Game parameters
-fig, axs = plt.subplots(1, 1, figsize=(10, 7))
+## 3. Results
+### 3.1. Baseline analysis: Participants’ performance and beliefs (pre-intervention)
+# Figure 2: Average performance in each inflation sequence and experiment.
+# Progression of stock levels, B_t, and savings account balances, S_t^f, comparing
+# average performance to maximum and naïve strategies of each inflation sequence.
+# The average performance is represented in blue: stock level as bars (left axis)
+# and savings account balance as a line (right axis). The maximum strategy is
+# represented in green: stock level as bars (left axis) and savings account
+# balance as a line (right axis). The naïve strategy is represented in orange:
+# savings account balance as a line (right axis).
+fig, axs = plt.subplots(3, 1, figsize=(10, 15))
 
-# Plot savings and stock on first subplot
-calc_opp_costs.plot_savings_and_stock(
-    df_decisions_all[df_decisions_all["participant.inflation"] == 430],
-    month_col="Month",
-    strategy_stock_cols=["sgoptimal", "sgnaive"],
-    strategy_savings_cols=["soptimal", "snaive"],
-    strategy_names=["Benchmark", "Naïve"],
-    palette="tab10",
-    ax=axs,
-    set_ylim=True,
+color_palette = sns.color_palette("tab10")
+performance_palette_dict = {
+    "Average": color_palette[0],
+    "Maximum": color_palette[2],
+    "Naïve": color_palette[1],
+}
+
+sequences = [(1012, 1), (430, 1), (430, 2)]
+
+df_beliefs = pd.concat(
+    [
+        df_survey,
+        df_survey_1[
+            [
+                "participant.code",
+                "participant.label",
+                "date",
+                "participant.inflation",
+                "participant.round",
+                "Measure",
+                "Estimate",
+                "Month",
+                "exp",
+            ]
+        ],
+    ]
+)
+
+df_beliefs["participant.inflation"] = np.where(
+    df_beliefs["participant.inflation"] == "4x30", 430, 1012
+)
+
+# Plot savings and stock on left-hand subplots
+for i, sequence in enumerate(sequences):
+    inflation, exp = sequence
+    calc_opp_costs.plot_savings_and_stock(
+        df_decisions_all[
+            (df_decisions_all["participant.inflation"] == inflation)
+            & (df_decisions_all["exp"] == exp)
+            & (df_decisions_all["phase"] == "pre")
+        ],
+        month_col="Month",
+        strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+        strategy_savings_cols=["soptimal", "snaive", "sreal"],
+        strategy_names=["Maximum", "Naïve", "Average"],
+        palette=performance_palette_dict,
+        ax=axs[i],
+        set_ylim=True,
+        fontsize=16,
+    )
+    axs[i].set_ylabel("Stock balance", labelpad=20, fontsize=16)
+    axs[i].set_xticks(axs[i].get_xticks()[0:120:12])
+    axs[i].set_xlabel("", fontsize=16)
+    axs[i].legend("", frameon=False)
+
+
+axs[0].legend(
+    loc="upper center",
+    bbox_to_anchor=(0.5, 1.30),
+    ncol=3,
+    fancybox=True,
+    shadow=True,
     fontsize=16,
 )
 
-axs.set_xlabel("Period", fontsize=16)
+axs[0].set_title("Panel A: 10×12 sequence, Experiment 1", fontsize=16)
+axs[1].set_title("Panel B: 4×30 sequence, Experiment 1", fontsize=16)
+axs[2].set_title("Panel C: 4×30 sequence, Experiment 2", fontsize=16)
 
-axs.legend(fontsize=16)
-axs.set_xticks(axs.get_xticks()[0:120:12])
+axs[2].set_xlabel("Period", fontsize=16)
 
-# calc_opp_costs.plot_savings_and_stock(
-#     df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
-#     month_col="Month",
-#     strategy_stock_cols=["sgoptimal", "sgnaive"],
-#     strategy_savings_cols=["soptimal", "snaive"],
-#     strategy_names=["Benchmark", "Naïve"],
-#     palette="tab10",
-#     ax=axs[0][1],
-#     set_ylim=True,
-#     fontsize=20,
-# )
+plt.tight_layout()
 
-# axs[0][1].set_xlabel("")
-
-# axs[0][1].legend(loc="upper left", fontsize=20)
-# axs[0][1].set_xticks(axs[0][1].get_xticks()[0:120:12])
-
-# Plot inflation estimates on second subplot
-
-# %%
-fig, axs = plt.subplots(2, 1, figsize=(12, 10))
-
-estimates = ["4x30"]
-df_inf_plot = df_survey.copy()
-df_inf_plot = df_inf_plot.replace("Actual", "4x30")
-df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
-sns.lineplot(
-    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
-    x="Month",
-    y="Estimate",
-    errorbar=None,
-    hue="Inflation sequence",
-    style="Inflation sequence",
-    ax=axs[0],
+# ! Export plot
+export_plot(
+    EXPORT_FILE_PATH, "Figure_2.png", export_all_plots=export_all_plots, dpi=1000
 )
 
-# Adjust titles and labels
-axs[0].set_title("4x30 sequence", fontsize=20)
-axs[0].set_xlabel("", labelpad=20, fontsize=20)
-axs[0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[0].legend("", frameon=False)
-
-estimates = ["10x12"]
-df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
-df_inf_plot = df_inf_plot.replace("Actual", "10x12")
-df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
-
-sns.lineplot(
-    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
-    x="Month",
-    y="Estimate",
-    errorbar=None,
-    hue="Inflation sequence",
-    style="Inflation sequence",
-    ax=axs[1],
-)
-
-# Adjust titles and labels
-axs[1].set_title("10x12 sequence", fontsize=20)
-axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
-axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
-axs[1].legend("", frameon=False)
-
-# plt.tight_layout()
 plt.show()
 
-
 # %% [markdown]
-## Overall performance
+# Table 1: Overall pre-treatment performance outcomes as a percentage of the final
+# maximum savings by experiment and inflation sequence. Standard deviations are
+# in parentheses.
 df_decisions_all[
     [
         "Mean Expectation Bias",
@@ -560,7 +536,7 @@ summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
 
 summary_dict = (
     summary.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[2:5]]]
+    .describe()[[(c, "mean") for c in summary.columns[2:6] if "Under" not in c]]
     .to_dict()
 )
 
@@ -590,7 +566,7 @@ summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10
 
 summary_std_dict = (
     summary_std.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[2:5]]]
+    .describe()[[(c, "mean") for c in summary_std.columns[2:6] if "Under" not in c]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
@@ -598,43 +574,44 @@ combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 pd.DataFrame(combined_dict).sort_index(ascending=True).style
 
 # %% [markdown]
-### Inflation beliefs
-summary_dict = (
-    summary.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[6:]]]
-    .to_dict()
-)
-summary_std_dict = (
-    summary_std.groupby(["Experiment", "Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[6:]]]
-    .to_dict()
-)
-combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
+# Correlation: perceptions and expectations
+data = df_decisions_all[
+    (df_decisions_all["participant.inflation"] == 430)
+    & (df_decisions_all["phase"] == "pre")
+    & (df_decisions_all["Month"] >= 12)
+    & (df_decisions_all["Quant Perception"].notna())
+    & (df_decisions_all["Quant Expectation"].notna())
+]
+correlation, p_value = pearsonr(data["Quant Perception"], data["Quant Expectation"])
 
-pd.DataFrame(combined_dict).style
-
+print(
+    f"""Indeed, we find a Pearson correlation coefficient of {correlation:.3f} \
+        (p<={p_value:.10f}) between perceived and expected inflation."""
+)
 
 # %% [markdown]
-### Performance plots
-fig, axs = plt.subplots(3, 2, figsize=(27, 20))
+# Figure 3: Average perceived and expected inflation in each inflation sequence
+# and experiment (pre-treatment). Average perceived inflation (dark blue solid line)
+# should align with actual inflation (red dotted line). Average expected inflation
+# (light blue solid line) should align with upcoming inflation (orange dashed line).
+# Note: we do not elicit perceptions at t=1 or expectations at t=120.
+fig, axs = plt.subplots(3, 1, figsize=(10, 17))
 
-color_palette = sns.color_palette("tab10")
-performance_palette_dict = {
-    "Average": color_palette[0],
-    "Benchmark": color_palette[2],
-    "Naïve": color_palette[1],
-}
 inflation_palette_dict = {
     "Quant Expectation": "#87CEEB",  # sky blue
     "Quant Perception": "#000080",  # navy blue
     "Actual": "#800020",  # burgundy
-    "Upcoming": "#CD5C5C",  # Indian red
+    "Upcoming": "#FF7700",  # orange
 }
 
 estimates = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
 hue_order = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
 
-sequences = [(1012, 1), (430, 1), (430, 2)]
+sequences = [
+    (1012, 1),
+    (430, 1),
+    (430, 2),
+]
 
 df_beliefs = pd.concat(
     [
@@ -661,22 +638,8 @@ df_beliefs["participant.inflation"] = np.where(
 
 # Plot savings and stock on left-hand subplots
 for i, sequence in enumerate(sequences):
+    print(i, sequence)
     inflation, exp = sequence
-    calc_opp_costs.plot_savings_and_stock(
-        df_decisions_all[
-            (df_decisions_all["participant.inflation"] == inflation)
-            & (df_decisions_all["exp"] == exp)
-            & (df_decisions_all["phase"] == "pre")
-        ],
-        month_col="Month",
-        strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
-        strategy_savings_cols=["soptimal", "snaive", "sreal"],
-        strategy_names=["Benchmark", "Naïve", "Average"],
-        palette=performance_palette_dict,
-        ax=axs[i][0],
-        set_ylim=True,
-        fontsize=16,
-    )
     sns.lineplot(
         data=df_beliefs[
             (df_beliefs["Measure"].isin(estimates))
@@ -688,114 +651,60 @@ for i, sequence in enumerate(sequences):
         errorbar=None,
         hue="Measure",
         style="Measure",
-        ax=axs[i][1],
+        ax=axs[i],
         palette=inflation_palette_dict,
-        hue_order=hue_order,
+        # hue_order=hue_order,
+        style_order=hue_order,
     )
-    axs[i][1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=16)
-    axs[i][0].set_xticks(axs[i][0].get_xticks()[0:120:12])
-    if i < 2:
-        axs[i][0].set_xlabel("", fontsize=16)
-        axs[i][1].set_xlabel("", fontsize=16)
-    else:
-        axs[i][0].set_xlabel("Period", fontsize=16)
-        axs[i][1].set_xlabel("Period", fontsize=16)
-    if i != 0:
-        axs[i][0].legend("", frameon=False)
-        axs[i][1].legend("", frameon=False)
+    axs[i].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=16)
+    axs[i].set_xlabel("", fontsize=16)
+    axs[i].legend("", frameon=False)
 
 
-axs[0][0].legend(
+axs[0].legend(
     loc="upper center",
-    bbox_to_anchor=(0.5, 1.15),
-    ncol=3,
-    fancybox=True,
-    shadow=True,
-    fontsize=16,
-)
-axs[0][1].legend(
-    loc="upper center",
-    bbox_to_anchor=(0.5, 1.22),
+    bbox_to_anchor=(0.5, 1.30),
     ncol=2,
     fancybox=True,
     shadow=True,
     fontsize=16,
 )
 
-axs[2][0].set_xlabel("Period", fontsize=16)
+axs[0].set_title("Panel A: 10×12 sequence, Experiment 1", fontsize=16)
+axs[1].set_title("Panel B: 4×30 sequence, Experiment 1", fontsize=16)
+axs[2].set_title("Panel C: 4×30 sequence, Experiment 2", fontsize=16)
 
-# plt.tight_layout()
-plt.show()
-
-# %% [markdown]
-### Inflation beliefs plots
-xlabel_fontsize = 16
-ylabel_fontsize = 16
-legend_fontsize = 16
-
-fig, axs = plt.subplots(1, 1, figsize=(10, 7))
-estimates = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
-hue_order = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
-
-# Manually define colors using the tab10 palette
-color_palette = sns.color_palette("tab10")
-palette_dict = {
-    "Quant Expectation": color_palette[3],  # red
-    "Quant Perception": color_palette[2],  # green
-    "Actual": color_palette[0],  # blue
-    "Upcoming": color_palette[1],  # orange
-}
-sns.lineplot(
-    data=df_beliefs[
-        (df_beliefs["Measure"].isin(estimates))
-        & (df_beliefs["participant.inflation"] == "4x30")
-        & (df_beliefs["participant.round"] == 1)
-    ],
-    x="Month",
-    y="Estimate",
-    errorbar=None,
-    hue="Measure",
-    style="Measure",
-    ax=axs,
-    palette=palette_dict,
-    hue_order=hue_order,
-)
-
-# Adjust titles and labels
-axs.set_xlabel("Period", fontsize=xlabel_fontsize)
-axs.set_ylabel("Inflation rate (%)", labelpad=20, fontsize=ylabel_fontsize)
-
-# Manually define legend labels
-handles, _ = axs.get_legend_handles_labels()
-# New labels corresponding to the hue_order
-new_labels = ["Perceived", "Expected", "Actual", "Upcoming"]
-axs.legend(
-    handles=handles,
-    labels=new_labels,
-    loc="upper left",
-    fontsize=legend_fontsize,
-)
+axs[2].set_xlabel("Period", fontsize=16)
 
 plt.tight_layout()
+
+# ! Export plot
+export_plot(
+    EXPORT_FILE_PATH, "Figure_3.png", export_all_plots=export_all_plots, dpi=1000
+)
+
 plt.show()
 
 # %% [markdown]
-### Correlation: perceptions and expectations
-data = df_decisions_all[
-    (df_decisions_all["participant.inflation"] == 430)
-    & (df_decisions_all["phase"] == "pre")
-    & (df_decisions_all["Month"] >= 12)
-    & (df_decisions_all["Quant Perception"].notna())
-    & (df_decisions_all["Quant Expectation"].notna())
-]
-correlation, p_value = pearsonr(data["Quant Perception"], data["Quant Expectation"])
-
-print(
-    f"Correlation between Quant Perception and Quant Expectation: {correlation:.3f} (p-value: {p_value:.10f})"
+# Table 2: Mean inflation belief measures for each pre-treatment inflation sequence
+# and experiment. Bias measures are separated by inflation phase (i.e. low and high
+# inflation). Standard deviations are in parentheses.
+summary_dict = (
+    summary.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[6:]]]
+    .to_dict()
 )
+summary_std_dict = (
+    summary_std.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[6:]]]
+    .to_dict()
+)
+combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
+
+pd.DataFrame(combined_dict).style
 
 # %% [markdown]
-## Test difference between experiments
+# Test statistical significance of difference in measures between experiments
 for measure in [
     "sreal_%",
     "early_%",
@@ -822,7 +731,8 @@ for measure in [
     print(f"{measure} p-value: {result.pvalue}")
 
 # %% [markdown]
-## OLS regressions: Overall performance measures on inflation measures
+# Table 3: OLS regression of performance measures (percentage of maximum savings)
+# on belief accuracy, 4×30 sequence. Standard errors are in parentheses. N=257.
 df_regress = df_decisions_all[(df_decisions_all["participant.inflation"] == 430)]
 df_regress = df_regress.rename(
     columns={
@@ -833,8 +743,6 @@ df_regress = df_regress.rename(
         "excess_%": "excess_percent",
     },
 )
-
-# %%
 regressions = {}
 
 for m in ["sreal_percent", "early_percent", "excess_percent"]:
@@ -851,10 +759,10 @@ results = summary_col(
 )
 results
 
-
 # %% [markdown]
-### Classify behavioral patterns
-#### t = 12
+### 3.2. Beliefs versus decisions: what drives performance?
+# Table 4: Belief-behavior classification during first 12 periods, 4×30 sequence,
+# Experiment 1 and 2 (N=257). All values are listed as percentages.
 df_decisions_all = decision_patterns.classify_subject_decision_patterns(
     data=df_decisions_all,
     estimate_measure="Quant Perception",
@@ -865,7 +773,6 @@ df_decisions_all = decision_patterns.classify_subject_decision_patterns(
     drop_na=True,
 )
 
-# %%
 summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120)
@@ -906,7 +813,9 @@ summary.loc[len(summary)] = [
 summary
 
 
-# %%
+# %% [markdown]
+# Table 5:Belief-behavior classification during first inflation phase-change, 4×30
+# sequence, Experiment 1 and 2 (N=257). All values are listed as percentages.
 for measure in [
     "Perception_bias",
     "Perception_sensitivity",
@@ -958,8 +867,6 @@ for month in [12, 30]:
             )
         )
 
-# %%[markdown]
-#### Quantitative pattern, t=30
 summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120)
@@ -999,7 +906,13 @@ summary.loc[len(summary)] = [
 
 summary
 
-# %%
+# %% [markdown]
+### 3.3. Individual characteristics, beliefs and performance
+# Table 6: Correlations between cognitive measures and performance, belief, and
+# behavior measures. We apply Pearson correlations when both variables are continous
+# and point bi-serial when variables are binary. We apply a Bonferroni correction.
+# Values in bold represent correlations with a p-value less than the corrected alpha
+# of 0.00089.
 # * Remove perception accuracy to only compare coherent decisions
 df_decisions_all["Quant Perception_consistent_12"] = df_decisions_all[
     "Quant Perception_pattern_12"
@@ -1012,9 +925,6 @@ df_decisions_all["Quant Perception_consistent_12"] = np.where(
 df_decisions_all["purchase_adaptation_30"] = np.where(
     df_decisions_all["purchase_adaptation_30"] == "A", 1, 0
 )
-
-# %% [markdown]
-## Behavioral measures
 df_behavioral = df_decisions_all[
     (df_decisions_all["phase"] >= "pre")
     & (df_decisions_all["participant.inflation"] == 430)
@@ -1036,32 +946,25 @@ df_econ_preferences_2 = econ_preferences.create_econ_preferences_dataframe(con_e
 df_knowledge_2[["exp"]] = 2
 df_econ_preferences_2[["exp"]] = 2
 
-# %%
 df_knowledge_all = pd.concat([df_knowledge_1, df_knowledge_2]).reset_index()
 df_knowledge_all = df_knowledge_all.drop(columns="index")
 df_econ_preferences_all = pd.concat(
     [df_econ_preferences_1, df_econ_preferences_2]
 ).reset_index()
 df_econ_preferences_all = df_econ_preferences_all.drop(columns="index")
-
-# %%
 df_behavioral = combine_series(
     [df_behavioral, df_knowledge_all, df_econ_preferences_all],
     how="left",
     on=["participant.label", "participant.round", "exp"],
 )
-
 y_cols = [c for c in df_behavioral.columns if c.endswith("_y")]
 df_behavioral = df_behavioral.drop(columns=y_cols)
-
 df_behavioral.columns = df_behavioral.columns.str.removesuffix("_x")
 
-# %%
 df_behavioral["n_switches"] = df_behavioral[
     ["lossAversion_switches", "riskPreferences_switches", "timePreferences_switches"]
 ].sum(axis=1)
 
-# %%
 df_corr = create_dynamic_correlation_matrix(
     df_behavioral[df_behavioral["Month"] == 120][CORRELATION_COLS],
     p_values=[0.1, 0.05, 0.01],
@@ -1072,7 +975,9 @@ df_corr = create_dynamic_correlation_matrix(
 df_corr[df_corr.index.isin(CORRELATION_COLS[7:13])][CORRELATION_COLS[:7]]
 
 # %% [markdown]
-## OLS/Logistic regression of performance and decision patterns on behavioral variables (Condensed)
+# Table 7: Condensed regression results of performance measures (OLS), behavior measures
+# (logistic), and belief-behavior classifications (logistic) on cognitive and economic
+# preference measures. Standard errors are in parentheses. N=257.
 df_regress = pd.get_dummies(
     df_behavioral,
     columns=["decision_pattern_30_perception_accuracy"],
@@ -1087,11 +992,11 @@ df_regress = pd.get_dummies(
     dtype=int,
 )
 
-
-# %%
 df_regress = df_regress.rename(
     columns={
         "sreal_%": "sreal_percent",
+        "early_%": "early_percent",
+        "excess_%": "excess_percent",
         "Quant Perception_consistent_12": "perception_consistent_12",
         "Quant Perception_pattern_12_AC": "perception_pattern_12_AC",
         "Quant Perception_pattern_12_AI": "perception_pattern_12_AI",
@@ -1101,10 +1006,13 @@ df_regress = df_regress.rename(
 
 df_regress_individual_chars = df_regress.copy()
 
-# %%
 regressions = {}
 
-for m in ["sreal_percent"] + LOGIT_COLS[:2] + LOGIT_COLS[3:5]:
+for m in (
+    ["sreal_percent", "early_percent", "excess_percent"]
+    + LOGIT_COLS[:2]
+    + LOGIT_COLS[3:5]
+):
     formula = f"""{m} ~ C(financial_literacy) + C(numeracy) + C(compound) + n_switches\
                 + wisconsin_choice_count + lossAversion_choice_count + riskPreferences_choice_count\
                     + timePreferences_choice_count"""
@@ -1142,7 +1050,11 @@ results = summary_col(
 results
 
 # %% [markdown]
-## Learning effect
+### 3.4. Learning and intervention effects
+# Table 8: Change in performance, beliefs, and behavior classifications between
+# rounds of the Savings Game among control participants (N=102), 4×30 sequence.
+# Performance measures are as a percentage of the maximum savings. Standard deviations
+# are in parentheses.
 df_learn = df_decisions_all[
     (df_decisions_all["treatment"].isin(["control", "Control"]))
     & (df_decisions_all["participant.inflation"] == 430)
@@ -1162,7 +1074,6 @@ df_learn = pd.get_dummies(
     drop_first=False,
     dtype=int,
 )
-# %%
 
 learning_effect, _ = intervention.create_learning_effect_table(
     df_learn,
@@ -1182,8 +1093,12 @@ learning_effect, _ = intervention.create_learning_effect_table(
 learning_effect = learning_effect.set_index("")
 learning_effect
 
-# %% [markdown]
-## Treatment effect
+# %%
+# Table 9: Condensed difference-in-difference results between treatment groups and
+# control, 4×30 sequence. Performance measures are as a percentage of benchmark
+# savings. Perception and expectation sensitivity are the difference in change in
+# average magnitude (between -1 and 1). Adaptive and consistent values represent
+# the difference in change in proportion of individuals in each treatment group.
 df_treat = df_decisions_all[
     (df_decisions_all["participant.inflation"] == 430)
     & (df_decisions_all["Month"] == 120)
@@ -1224,6 +1139,98 @@ treatment_effect = intervention.create_diff_in_diff_table(
 treatment_effect = treatment_effect.set_index("")
 
 treatment_effect
+
+# %% [markdown]
+## Appendix A
+### Appendix A.1. Timing of experiments
+# Figure A.1: Annualized rate of change of Harmonised Index of Consumer Prices (HICP)
+# for France. Rates are reported monthly. Experiment 1 takes place at the absolute
+# peak (7.3%). Experiment 2 takes place at a much lower inflation rate (2.6-2.5%).
+
+df_real_inflation = pd.read_csv(DATA_FILE_PATH / "France HICP_20251112134158.csv")
+df_real_inflation = df_real_inflation.drop(columns=["TIME PERIOD"])
+df_real_inflation["DATE"] = pd.to_datetime(df_real_inflation["DATE"])
+df_real_inflation = df_real_inflation.rename(
+    columns={
+        "HICP - Overall index - France (ICP.M.FR.N.000000.4.ANR)": "HICP (%)",
+        "DATE": "Date",
+    }
+)
+title_fontsize = 20
+label_fontsize = 16
+legend_fontsize = 14
+tick_fontsize = 12
+
+fig, ax = plt.subplots(figsize=(13, 5))
+sns.lineplot(data=df_real_inflation, x="Date", y="HICP (%)", ax=ax)
+ax.axvline(x=pd.to_datetime("2023-02-28"), color="r", linestyle="--", label="Exp 1")
+ax.axvline(x=pd.to_datetime("2024-05-31"), color="g", linestyle="--", label="Exp 2")
+ax.axhline(y=0, color="black", linestyle="-")
+ax.set_title("HICP (% Change) - France, Monthly", fontsize=title_fontsize)
+ax.set_xlabel("Date", fontsize=label_fontsize)
+ax.set_ylabel("HICP (%)", fontsize=label_fontsize)
+ax.tick_params(axis="x", labelsize=tick_fontsize)
+ax.tick_params(axis="y", labelsize=tick_fontsize)
+ax.legend(fontsize=legend_fontsize)
+
+# ! Export plot
+export_plot(
+    EXPORT_FILE_PATH, "Figure_A1.png", export_all_plots=export_all_plots, dpi=1000
+)
+
+plt.show()
+
+# %% [markdown]
+### Appendix A.2.2. Inflation sequences
+fig, axs = plt.subplots(2, 1, figsize=(12, 10))
+
+estimates = ["4x30"]
+df_inf_plot = df_survey.copy()
+df_inf_plot = df_inf_plot.replace("Actual", "4x30")
+df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+sns.lineplot(
+    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Inflation sequence",
+    style="Inflation sequence",
+    ax=axs[0],
+)
+
+# Adjust titles and labels
+axs[0].set_title("4x30 sequence", fontsize=20)
+axs[0].set_xlabel("", labelpad=20, fontsize=20)
+axs[0].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[0].legend("", frameon=False)
+
+estimates = ["10x12"]
+df_inf_plot = df_survey_1[df_survey_1["participant.inflation"] == "10x12"].copy()
+df_inf_plot = df_inf_plot.replace("Actual", "10x12")
+df_inf_plot = df_inf_plot.rename(columns={"Measure": "Inflation sequence"})
+
+sns.lineplot(
+    data=df_inf_plot[df_inf_plot["Inflation sequence"].isin(estimates)],
+    x="Month",
+    y="Estimate",
+    errorbar=None,
+    hue="Inflation sequence",
+    style="Inflation sequence",
+    ax=axs[1],
+)
+
+# Adjust titles and labels
+axs[1].set_title("10x12 sequence", fontsize=20)
+axs[1].set_xlabel("Month", labelpad=20, fontsize=20)
+axs[1].set_ylabel("Inflation rate (%)", labelpad=20, fontsize=20)
+axs[1].legend("", frameon=False)
+
+# ! Export plot
+export_plot(
+    EXPORT_FILE_PATH, "Figure_A2.png", export_all_plots=export_all_plots, dpi=1000
+)
+
+plt.show()
 
 # %% [markdown]
 ## Appendix E
@@ -1332,19 +1339,6 @@ summary_std_dict = (
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 
 pd.DataFrame(combined_dict).style
-
-# %%
-data = df_performance_measures.copy()
-data = data.rename(columns={"participant.inflation": "Inflation"})
-data["Inflation"] = np.where(data["Inflation"] == 430, "4x30", "10x12")
-sns.lmplot(
-    data[data["participant.round"] == 1],
-    x="Quant Perception",
-    y="Quant Expectation",
-    hue="participant.round",
-    col="Inflation",
-    legend=None,
-)
 
 # %%
 ### OLS Regression: Effects of belief accuracy on performance with inflation-phase biases, 4×30 sequence
