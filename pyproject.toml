@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "savings-game-analysis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "duckdb",
+    "ipykernel",
+    "jinja2>=3.1.6",
+    "matplotlib",
+    "numpy",
+    "openpyxl",
+    "pandas",
+    "pingouin",
+    "python-dotenv",
+    "seaborn",
+    "statsmodels",
+    "tqdm",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "utils*", "scripts*"]
+namespaces = true
