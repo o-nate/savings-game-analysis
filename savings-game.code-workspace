@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../savings-game-analysis",
+            "name": "savings_game_analysis"
+		},
+        {
+            "path": "../savings-game",
+            "name": "savings_game"
+        }
+	],
+	"settings": {}
+}
