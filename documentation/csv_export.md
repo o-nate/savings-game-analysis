@@ -31,18 +31,18 @@ Constants at the top of this file intentionally **mirror** `results.py`; if you 
 
 Default output directory: `data/csv_export/combined/` (created if missing).
 
-| File | Contents |
-|------|----------|
-| `demographics_combined.csv` | Pooled questionnaire columns from both experiments |
-| `inflation_estimates_combined.csv` | Inflation knowledge (`infK_*`) measures with an `experiment` column |
-| `decisions_pre_classify_behavioral_patterns.csv` | Combined decisions panel before behavioral pattern classification |
-| `decisions_all_enriched.csv` | Same panel after classification and recodes used for behavioral analysis |
-| `knowledge_combined.csv` | Pooled literacy / numeracy / compound scores with `exp` |
-| `econ_preferences_combined.csv` | Pooled preference-task aggregates with `exp` |
-| `behavioral_combined.csv` | Behavioral slice merged with knowledge and econ preferences |
-| `learning_effect_initial.csv` | Learning-effect summary (first measure set) |
-| `learning_effect_complete.csv` | Learning-effect summary (extended measure set) |
-| `treatment_effect.csv` | Diff-in-diff style treatment summary |
+| File                                             | Contents                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------ |
+| `demographics_combined.csv`                      | Pooled questionnaire columns from both experiments                       |
+| `inflation_estimates_combined.csv`               | Inflation knowledge (`infK_*`) measures with an `experiment` column      |
+| `decisions_pre_classify_behavioral_patterns.csv` | Combined decisions panel before behavioral pattern classification        |
+| `decisions_all_enriched.csv`                     | Same panel after classification and recodes used for behavioral analysis |
+| `knowledge_combined.csv`                         | Pooled literacy / numeracy / compound scores with `exp`                  |
+| `econ_preferences_combined.csv`                  | Pooled preference-task aggregates with `exp`                             |
+| `behavioral_combined.csv`                        | Behavioral slice merged with knowledge and econ preferences              |
+| `learning_effect_initial.csv`                    | Learning-effect summary (first measure set)                              |
+| `learning_effect_complete.csv`                   | Learning-effect summary (extended measure set)                           |
+| `treatment_effect.csv`                           | Diff-in-diff style treatment summary                                     |
 
 Unless `--skip-static` is passed, the exporter also copies **`France HICP_20251112134158.csv`** from `data/` into the output directory when that file is present (for HICP plots in a notebook).
 

@@ -1525,3 +1525,52 @@ output_file = (
 )
 
 ancova_restructurer.restructure_excel_file(input_file, output_file)
+
+# %% [markdown]
+### OLS: Over-stocking and wasteful-stocking on initial quantitative expectations (Experiment 2 only)
+
+# %%
+df_regress_exp2 = df_decisions_all[
+    (df_decisions_all["exp"] == 2)
+    & (df_decisions_all["participant.inflation"] == 430)
+    & (df_decisions_all["phase"] == "pre")
+    & (df_decisions_all["Month"] == 120)
+].copy()
+
+quant_exp_t1 = df_decisions_all[
+    (df_decisions_all["exp"] == 2)
+    & (df_decisions_all["participant.inflation"] == 430)
+    & (df_decisions_all["Month"] == 1)
+][["participant.code", "participant.round", "Quant Expectation"]].rename(
+    columns={"Quant Expectation": "quant_expectation_t1"}
+)
+
+df_regress_exp2 = df_regress_exp2.merge(
+    quant_exp_t1, on=["participant.code", "participant.round"], how="left"
+)
+
+df_regress_exp2 = df_regress_exp2.rename(
+    columns={
+        "early_%": "early_percent",
+        "excess_%": "excess_percent",
+        "participant.round": "round",
+    },
+)
+
+regressions = {}
+
+for m in ["early_percent", "excess_percent"]:
+    model = smf.ols(
+        formula=f"{m} ~ quant_expectation_t1 + round",
+        data=df_regress_exp2,
+    )
+    regressions[m] = model.fit()
+
+results = summary_col(
+    results=list(regressions.values()),
+    stars=True,
+    model_names=list(regressions.keys()),
+)
+results
+
+# %%
