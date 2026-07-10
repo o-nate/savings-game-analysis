@@ -5,6 +5,7 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
+from scipy.optimize import brentq
 
 from src.utils import constants
 from src.utils import helpers
@@ -16,6 +17,77 @@ logger = get_logger(__name__)
 
 DATABASE_FILE_1 = Path(__file__).parents[1] / "data" / EXP_1_DATABASE
 DATABASE_FILE_2 = Path(__file__).parents[1] / "data" / EXP_2_DATABASE
+
+# Holt-Laury payoffs from savings-game/riskPreferences/stimuli.csv
+HL_OPTION_A = (2.00, 1.60)  # safe (high, low)
+HL_OPTION_B = (3.85, 0.10)  # risky (high, low)
+HL_HIGH_PROBS = [i / 10 for i in range(1, 11)]  # P(high payoff) per row, 0.1..1.0
+_CARA_GAMMA_EPS = 1e-9
+_CARA_GAMMA_BRACKET = (-50.0, 50.0)
+
+
+def _cara_eu(gamma: float, high: float, low: float, p: float) -> float:
+    """Normalized CARA expected utility; reduces to expected value as gamma -> 0."""
+    if abs(gamma) < _CARA_GAMMA_EPS:
+        return p * high + (1 - p) * low
+    return (1 - (p * np.exp(-gamma * high) + (1 - p) * np.exp(-gamma * low))) / gamma
+
+
+def _indifference_gap(gamma: float, p: float) -> float:
+    """EU_B - EU_A at probability p; monotone in gamma for fixed p."""
+    return _cara_eu(gamma, *HL_OPTION_B, p) - _cara_eu(gamma, *HL_OPTION_A, p)
+
+
+def _solve_gamma_at_p(p: float, bracket: tuple[float, float] = _CARA_GAMMA_BRACKET) -> float:
+    """Solve gamma such that EU_A = EU_B at probability p."""
+    if p >= 1.0 - 1e-12:
+        return np.inf
+    if p <= 1e-12:
+        return -np.inf
+
+    lo, hi = bracket
+    gap_lo, gap_hi = _indifference_gap(lo, p), _indifference_gap(hi, p)
+    if gap_lo > 0 and gap_hi > 0:
+        return np.inf
+    if gap_lo < 0 and gap_hi < 0:
+        return -np.inf
+    return brentq(_indifference_gap, lo, hi, args=(p,))
+
+
+def cara_gamma_intervals(safe_counts: pd.Series) -> pd.DataFrame:
+    """CARA gamma interval (low, high, midpoint) per Holt-Laury safe-choice count k.
+
+    k safe choices imply indifference between rows k and k+1:
+    gamma in [gamma*(p_k), gamma*(p_{k+1})]. Open sides return NaN; midpoint is NaN
+    unless both endpoints are finite.
+
+    Args:
+        safe_counts (pd.Series): Number of safe (Option A) choices per participant.
+
+    Returns:
+        pd.DataFrame: Columns risk_gamma_low, risk_gamma_high, risk_gamma_mid.
+    """
+    edges = [_solve_gamma_at_p(p) for p in HL_HIGH_PROBS]
+    rows: dict[int, tuple[float, float, float]] = {}
+    for k in range(11):
+        low = edges[k - 1] if k >= 1 else -np.inf
+        high = edges[k] if k <= 9 else np.inf
+        low = low if np.isfinite(low) else np.nan
+        high = high if np.isfinite(high) else np.nan
+        mid = (low + high) / 2 if np.isfinite(low) and np.isfinite(high) else np.nan
+        rows[k] = (low, high, mid)
+
+    def _lookup(count: float) -> tuple[float, float, float]:
+        if pd.isna(count):
+            return (np.nan, np.nan, np.nan)
+        return rows[int(round(count))]
+
+    out = safe_counts.map(_lookup)
+    return pd.DataFrame(
+        out.tolist(),
+        index=safe_counts.index,
+        columns=["risk_gamma_low", "risk_gamma_high", "risk_gamma_mid"],
+    )
 
 
 def count_preference_choices(data: pd.DataFrame, econ_preference: str) -> pd.Series:

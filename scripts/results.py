@@ -1557,20 +1557,45 @@ df_regress_exp2 = df_regress_exp2.rename(
     },
 )
 
-regressions = {}
+risk_counts = df_econ_preferences_all.loc[
+    df_econ_preferences_all["exp"] == 2,
+    ["participant.label", "riskPreferences_choice_count"],
+].drop_duplicates("participant.label")
+risk_counts[["risk_gamma_low", "risk_gamma_high", "risk_gamma_mid"]] = (
+    econ_preferences.cara_gamma_intervals(risk_counts["riskPreferences_choice_count"])
+)
+df_regress_exp2 = df_regress_exp2.merge(
+    risk_counts.drop(columns="riskPreferences_choice_count"),
+    on="participant.label",
+    how="left",
+)
+
+gamma_specs = {
+    "low": "risk_gamma_low",
+    "mid": "risk_gamma_mid",
+    "high": "risk_gamma_high",
+}
+results_tables = {}
 
 for m in ["early_percent", "excess_percent"]:
-    model = smf.ols(
-        formula=f"{m} ~ quant_expectation_t1 + round",
-        data=df_regress_exp2,
+    regressions = {}
+    for label, col in gamma_specs.items():
+        model = smf.ols(
+            formula=f"{m} ~ quant_expectation_t1 + round * {col}",
+            data=df_regress_exp2,
+        )
+        regressions[f"{m} ({label})"] = model.fit()
+    results_tables[m] = summary_col(
+        results=list(regressions.values()),
+        stars=True,
+        model_names=list(regressions.keys()),
     )
-    regressions[m] = model.fit()
 
-results = summary_col(
-    results=list(regressions.values()),
-    stars=True,
-    model_names=list(regressions.keys()),
-)
-results
+# %% [markdown]
+### Over-stocking
+results_tables["early_percent"]
+# %% [markdown]
+### Wasteful-stocking
+results_tables["excess_percent"]
 
 # %%
