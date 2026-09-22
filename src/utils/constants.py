@@ -23,23 +23,52 @@ EXP_1_COLUMNS_HASH = {
 # * Define annualized inflation, per 12 months
 INF_1012 = [0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79]
 INF_430 = [0.38, 0.47, 26.85, 55.49, 64.18, 0.38, 0.47, 26.85, 55.49, 64.18]
+INFLATION_SEQUENCES = {430: INF_430, 1012: INF_1012}
+INFLATION_SEQUENCE_LABELS = {430: "4x30", 1012: "10x12"}
 
-INFLATION_DICT = {
-    "participant.inflation": [430 for m in range(40)],  # + [1012 for m in range(19)],
-    "participant.round": [1 for m in range(10)]
-    + [1 for m in range(10)]
-    + [2 for m in range(10)]
-    + [2 for m in range(10)],
-    "Month": [m * 12 for m in range(1, 11)]
-    + [m * 12 if m > 0 else m + 1 for m in range(10)]
-    + [m * 12 for m in range(1, 11)]
-    + [m * 12 if m > 0 else m + 1 for m in range(10)],
-    "Measure": ["Actual" for m in range(10)]
-    + ["Upcoming" for m in range(10)]
-    + ["Actual" for m in range(10)]
-    + ["Upcoming" for m in range(10)],
-    "Estimate": INF_430 + INF_430 + INF_430 + INF_430,  # + INF_1012 + INF_1012[1:],
-}
+
+def _inflation_schedule(sequence: int, rates: list[float]) -> dict[str, list]:
+    """Realized inflation for one sequence, repeated for rounds 1 and 2.
+
+    Actual is the rate over the 12 months ending at each survey month.
+    Upcoming at month t is the rate over the following 12 months, so the
+    upcoming value at month 1 is the first actual rate.
+    """
+    actual_months = [month * 12 for month in range(1, 11)]
+    upcoming_months = [1] + actual_months[:-1]
+    schedule = {
+        "participant.inflation": [],
+        "participant.round": [],
+        "Month": [],
+        "Measure": [],
+        "Estimate": [],
+    }
+    for round_number in (1, 2):
+        measures = (("Actual", actual_months), ("Upcoming", upcoming_months))
+        for measure, months in measures:
+            for month, rate in zip(months, rates):
+                schedule["participant.inflation"].append(sequence)
+                schedule["participant.round"].append(round_number)
+                schedule["Month"].append(month)
+                schedule["Measure"].append(measure)
+                schedule["Estimate"].append(rate)
+    return schedule
+
+
+def _combine_schedules(*schedules: dict[str, list]) -> dict[str, list]:
+    combined = {key: [] for key in schedules[0]}
+    for schedule in schedules:
+        for key, values in schedule.items():
+            combined[key].extend(values)
+    return combined
+
+
+INFLATION_DICT = _combine_schedules(
+    *(
+        _inflation_schedule(sequence, rates)
+        for sequence, rates in INFLATION_SEQUENCES.items()
+    )
+)
 
 # * Economic preferences
 CHOICES = {

@@ -409,7 +409,7 @@ df_decisions_all.head()
 
 # %% [markdown]
 ## Savings Game parameters
-fig, axs = plt.subplots(1, 1, figsize=(10, 7))
+fig, axs = plt.subplots(2, 1, figsize=(10, 10))
 
 # Plot savings and stock on first subplot
 calc_opp_costs.plot_savings_and_stock(
@@ -419,32 +419,32 @@ calc_opp_costs.plot_savings_and_stock(
     strategy_savings_cols=["soptimal", "snaive"],
     strategy_names=["Benchmark", "Naïve"],
     palette="tab10",
-    ax=axs,
+    ax=axs[0],
     set_ylim=True,
     fontsize=16,
 )
 
-axs.set_xlabel("Period", fontsize=16)
+axs[0].set_xlabel("")
+axs[0]
+axs[0].legend(fontsize=16)
+# axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
 
-axs.legend(fontsize=16)
-axs.set_xticks(axs.get_xticks()[0:120:12])
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive"],
+    strategy_savings_cols=["soptimal", "snaive"],
+    strategy_names=["Benchmark", "Naïve"],
+    palette="tab10",
+    ax=axs[1],
+    set_ylim=True,
+    fontsize=20,
+)
 
-# calc_opp_costs.plot_savings_and_stock(
-#     df_decisions_all[df_decisions_all["participant.inflation"] == 1012],
-#     month_col="Month",
-#     strategy_stock_cols=["sgoptimal", "sgnaive"],
-#     strategy_savings_cols=["soptimal", "snaive"],
-#     strategy_names=["Benchmark", "Naïve"],
-#     palette="tab10",
-#     ax=axs[0][1],
-#     set_ylim=True,
-#     fontsize=20,
-# )
+axs[1].set_xlabel("Period", fontsize=16)
 
-# axs[0][1].set_xlabel("")
-
-# axs[0][1].legend(loc="upper left", fontsize=20)
-# axs[0][1].set_xticks(axs[0][1].get_xticks()[0:120:12])
+axs[1].legend().set_visible(False)
+axs[1].set_xticks(axs[1].get_xticks()[0:120:12])
 
 # Plot inflation estimates on second subplot
 
@@ -519,7 +519,7 @@ summary = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["participant.inflation"])[PERFORMANCE_COLS]
+    .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
     .describe()[[(c, "mean") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
@@ -527,7 +527,7 @@ summary_std = (
     df_decisions_all[
         (df_decisions_all["Month"] == 120) & (df_decisions_all["phase"] == "pre")
     ]
-    .groupby(["participant.inflation"])[PERFORMANCE_COLS]
+    .groupby(["exp", "participant.inflation"])[PERFORMANCE_COLS]
     .describe()[[(c, "std") for c in PERFORMANCE_COLS]]
     .reset_index()
 )
@@ -539,11 +539,11 @@ summary = summary.rename(
         **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
-            "Mean Perception Bias Low": "Perception_bias_low",
-            "Mean Perception Bias High": "Perception_bias_high",
+            "Perception_bias_low": "Mean Perception Bias Low",
+            "Perception_bias_high": "Mean Perception Bias High",
             "Expectation_sensitivity": "Expectation Sensitivity",
-            "Mean Expectation Bias Low": "Expectation_bias_low",
-            "Mean Expectation Bias High": "Expectation_bias_high",
+            "Expectation_bias_low": "Mean Expectation Bias Low",
+            "Expectation_bias_high": "Mean Expectation Bias High",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
             # "participant.day": "Day",
@@ -557,8 +557,8 @@ summary["Inflation"] = np.where(summary["Inflation"] == 430, "4x30", "10x12")
 # summary["Day"] = summary["Day"].astype(int)
 
 summary_dict = (
-    summary.groupby(["Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[1:5]]]
+    summary.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[2:6]]]
     .to_dict()
 )
 
@@ -569,11 +569,11 @@ summary_std = summary_std.rename(
         **BEHAVIOR_COLS
         | {
             "Perception_sensitivity": "Perception Sensitivity",
-            "Mean Perception Bias Low": "Perception_bias_low",
-            "Mean Perception Bias High": "Perception_bias_high",
+            "Perception_bias_low": "Mean Perception Bias Low",
+            "Perception_bias_high": "Mean Perception Bias High",
             "Expectation_sensitivity": "Expectation Sensitivity",
-            "Mean Expectation Bias Low": "Expectation_bias_low",
-            "Mean Expectation Bias High": "Expectation_bias_high",
+            "Expectation_bias_low": "Mean Expectation Bias Low",
+            "Expectation_bias_high": "Mean Expectation Bias High",
             "participant.inflation": "Inflation",
             "exp": "Experiment",
             # "participant.day": "Day",
@@ -587,55 +587,98 @@ summary_std["Inflation"] = np.where(summary_std["Inflation"] == 430, "4x30", "10
 # summary_std["Day"] = summary_std["Day"].astype(int)
 
 summary_std_dict = (
-    summary_std.groupby(["Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[1:5]]]
+    summary_std.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[2:6]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 
-pd.DataFrame(combined_dict).sort_index(ascending=False).style
+pd.DataFrame(combined_dict).sort_index(ascending=[True, False]).style
 
 # %% [markdown]
 ### Inflation beliefs
 summary_dict = (
-    summary.groupby(["Inflation"])
-    .describe()[[(c, "mean") for c in summary.columns[5:]]]
+    summary.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary.columns[6:]]]
     .to_dict()
 )
 summary_std_dict = (
-    summary_std.groupby(["Inflation"])
-    .describe()[[(c, "mean") for c in summary_std.columns[5:]]]
+    summary_std.groupby(["Experiment", "Inflation"])
+    .describe()[[(c, "mean") for c in summary_std.columns[6:]]]
     .to_dict()
 )
 combined_dict = combine_mean_std_dicts(summary_dict, summary_std_dict)
 
-pd.DataFrame(combined_dict).style
+pd.DataFrame(combined_dict).sort_index(ascending=[True, False]).style
 
 
 # %% [markdown]
 ### Performance plots
-fig, axs = plt.subplots(1, 1, figsize=(12, 7))
+fig, axs = plt.subplots(3, 1, figsize=(12, 10))
 
 # Plot savings and stock on first subplot
 calc_opp_costs.plot_savings_and_stock(
     df_decisions_all[
         (df_decisions_all["participant.inflation"] == 430)
         & (df_decisions_all["phase"] == "pre")
+        & (df_decisions_all["exp"] == 1)
     ],
     month_col="Month",
     strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
     strategy_savings_cols=["soptimal", "snaive", "sreal"],
     strategy_names=["Benchmark", "Naïve", "Average"],
     palette="tab10",
-    ax=axs,
+    ax=axs[0],
     set_ylim=True,
     fontsize=16,
 )
 
-axs.set_xlabel("Period", fontsize=16)
+axs[0].set_xlabel("Period", fontsize=16)
 
-axs.legend(loc="upper center", fontsize=16)
-axs.set_xticks(axs.get_xticks()[0:120:12])
+axs[0].legend(loc="upper left", fontsize=16)
+# axs[0].set_xticks(axs[0].get_xticks()[0:120:12])
+
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[
+        (df_decisions_all["participant.inflation"] == 430)
+        & (df_decisions_all["phase"] == "pre")
+        & (df_decisions_all["exp"] == 2)
+    ],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+    strategy_savings_cols=["soptimal", "snaive", "sreal"],
+    strategy_names=["Benchmark", "Naïve", "Average"],
+    palette="tab10",
+    ax=axs[1],
+    set_ylim=True,
+    fontsize=16,
+)
+
+axs[1].set_xlabel("Period", fontsize=16)
+
+axs[1].legend(loc="upper center", fontsize=16).set_visible(False)
+# axs[1].set_xticks(axs[1].get_xticks()[0:120:12])
+
+calc_opp_costs.plot_savings_and_stock(
+    df_decisions_all[
+        (df_decisions_all["participant.inflation"] == 1012)
+        & (df_decisions_all["phase"] == "pre")
+        & (df_decisions_all["exp"] == 1)
+    ],
+    month_col="Month",
+    strategy_stock_cols=["sgoptimal", "sgnaive", "finalStock"],
+    strategy_savings_cols=["soptimal", "snaive", "sreal"],
+    strategy_names=["Benchmark", "Naïve", "Average"],
+    palette="tab10",
+    ax=axs[2],
+    set_ylim=True,
+    fontsize=16,
+)
+
+axs[2].set_xlabel("Period", fontsize=16)
+
+axs[2].legend().set_visible(False)
+axs[2].set_xticks(axs[2].get_xticks()[0:120:12])
 
 # %% [markdown]
 ### Inflation beliefs plots
@@ -643,7 +686,7 @@ xlabel_fontsize = 16
 ylabel_fontsize = 16
 legend_fontsize = 16
 
-fig, axs = plt.subplots(1, 1, figsize=(10, 7))
+fig, axs = plt.subplots(2, 1, figsize=(12, 10))
 estimates = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
 hue_order = ["Quant Perception", "Quant Expectation", "Actual", "Upcoming"]
 
@@ -655,27 +698,36 @@ palette_dict = {
     "Actual": color_palette[0],  # blue
     "Upcoming": color_palette[1],  # orange
 }
-sns.lineplot(
-    data=df_survey[df_survey["Measure"].isin(estimates)],
-    x="Month",
-    y="Estimate",
-    errorbar=None,
-    hue="Measure",
-    style="Measure",
-    ax=axs,
-    palette=palette_dict,
-    hue_order=hue_order,
-)
-
-# Adjust titles and labels
-axs.set_xlabel("Period", fontsize=xlabel_fontsize)
-axs.set_ylabel("Inflation rate (%)", labelpad=20, fontsize=ylabel_fontsize)
+# Experiment 2 is 4x30 only; the 10x12 sequence comes from experiment 1.
+belief_panels = [
+    (df_survey[df_survey["participant.inflation"] == "4x30"], "4x30 sequence"),
+    (
+        df_survey_1[df_survey_1["participant.inflation"] == "10x12"],
+        "10x12 sequence",
+    ),
+]
+for ax, (panel_data, title) in zip(axs, belief_panels):
+    sns.lineplot(
+        data=panel_data[panel_data["Measure"].isin(estimates)],
+        x="Month",
+        y="Estimate",
+        errorbar=None,
+        hue="Measure",
+        style="Measure",
+        ax=ax,
+        palette=palette_dict,
+        hue_order=hue_order,
+        legend=ax is axs[0],
+    )
+    ax.set_title(title, fontsize=20)
+    ax.set_xlabel("" if ax is axs[0] else "Period", fontsize=xlabel_fontsize)
+    ax.set_ylabel("Inflation rate (%)", labelpad=20, fontsize=ylabel_fontsize)
 
 # Manually define legend labels
-handles, _ = axs.get_legend_handles_labels()
+handles, _ = axs[0].get_legend_handles_labels()
 # New labels corresponding to the hue_order
 new_labels = ["Perceived", "Expected", "Actual", "Upcoming"]
-axs.legend(
+axs[0].legend(
     handles=handles,
     labels=new_labels,
     loc="upper left",

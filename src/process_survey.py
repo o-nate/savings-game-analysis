@@ -12,7 +12,11 @@ import numpy.typing as npt
 import pandas as pd
 import seaborn as sns
 
-from src.utils.constants import EXP_2_DATABASE, INFLATION_DICT
+from src.utils.constants import (
+    EXP_2_DATABASE,
+    INFLATION_DICT,
+    INFLATION_SEQUENCE_LABELS,
+)
 from src.utils.database import create_duckdb_database, table_exists
 from src.utils.helpers import combine_series
 from utils.logging_config import get_logger
@@ -172,6 +176,9 @@ def pivot_inflation_measures(data: pd.DataFrame) -> pd.DataFrame:
         "_".join(str(i) for i in a) for a in df_inf.columns.to_flat_index()
     ]
     df_inf.reset_index(inplace=True)
+    df_inf["participant.inflation"] = df_inf["participant.inflation"].replace(
+        INFLATION_SEQUENCE_LABELS
+    )
 
     df_pivot = pd.pivot_table(
         data=data,
@@ -192,10 +199,13 @@ def pivot_inflation_measures(data: pd.DataFrame) -> pd.DataFrame:
     ]
     df_pivot.reset_index(inplace=True)
 
+    df_pivot["participant.inflation"] = df_pivot["participant.inflation"].replace(
+        INFLATION_SEQUENCE_LABELS
+    )
     df_pivot = df_pivot.merge(
-        df_inf[[c for c in df_inf.columns if "inflation" not in c]],
+        df_inf,
         how="left",
-        on=["Month", "participant.round"],
+        on=["participant.inflation", "participant.round", "Month"],
     )
 
     df_pivot.rename(
