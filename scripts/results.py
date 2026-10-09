@@ -1185,6 +1185,27 @@ treatment_effect
 
 # %% [markdown]
 ## Appendix E
+
+# %% [markdown]
+### Near performance maximizations
+df_near_performance_maximizations = df_performance_measures[
+    (df_performance_measures["Month"] == 120)
+    & (df_performance_measures["phase"] == "pre")
+    & (df_performance_measures["sreal_%"] >= 0.90)
+]
+
+df_near_performance_maximizations["Percent of maximum"] = (
+    100
+    * df_near_performance_maximizations["sreal"]
+    / df_near_performance_maximizations["soptimal"]
+)
+
+df_near_performance_maximizations[
+    ["participant.code", "participant.inflation", "exp", "sreal", "Percent of maximum"]
+].sort_values(by=["Percent of maximum", "sreal"], ascending=False).set_index(
+    "participant.code"
+)
+
 # %% [markdown]
 ### Overall performance
 df_performance_measures[["Mean Perception Bias", "Mean Expectation Bias"]] = (

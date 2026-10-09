@@ -53,7 +53,9 @@ for q in ["q2", "q3"]:
 # %%
 # Clean data
 for q in ["q2", "q3"]:
-    df_responses[f"sessionResults.1.player.{q}"].fillna("", inplace=True)
+    df_responses[f"sessionResults.1.player.{q}"] = df_responses[
+        f"sessionResults.1.player.{q}"
+    ].fillna("")
     print(len(df_responses[df_responses[f"sessionResults.1.player.{q}"].isna()]))
 
 # %%

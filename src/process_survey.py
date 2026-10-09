@@ -18,7 +18,7 @@ from src.utils.constants import (
     INFLATION_SEQUENCE_LABELS,
 )
 from src.utils.database import create_duckdb_database, table_exists
-from src.utils.helpers import combine_series
+from src.utils.helpers import combine_series, to_numeric_ignore
 from utils.logging_config import get_logger
 
 # * Logging settings
@@ -169,6 +169,7 @@ def pivot_inflation_measures(data: pd.DataFrame) -> pd.DataFrame:
         df_inf,
         index=["participant.inflation", "participant.round", "Month"],
         columns="Measure",
+        values=["Estimate"],
     )
 
     ## Remove multiindex columns
@@ -191,6 +192,7 @@ def pivot_inflation_measures(data: pd.DataFrame) -> pd.DataFrame:
             "Month",
         ],
         columns="Measure",
+        values=["Estimate"],
     )
 
     ## Remove multiindex columns
@@ -339,13 +341,11 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
 
     # * Convert columns to int, except participant.time_started_utc
     cols_to_convert = [c for c in df_survey.columns if c != "date"]
-    df_survey[cols_to_convert] = df_survey[cols_to_convert].apply(
-        pd.to_numeric, errors="ignore"
-    )
+    df_survey[cols_to_convert] = df_survey[cols_to_convert].apply(to_numeric_ignore)
 
     # * Rename df_measures
     df_survey["Measure"] = df_survey["Measure"].str.split("player.").str[1]
-    df_survey["Measure"].replace(
+    df_survey["Measure"] = df_survey["Measure"].replace(
         [
             "inf_estimate",
             "inf_expectation",
@@ -358,7 +358,6 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
             "Qual Perception",
             "Qual Expectation",
         ],
-        inplace=True,
     )
 
     # * Add actual inflation
@@ -367,10 +366,9 @@ def create_survey_df(include_inflation: bool = False) -> pd.DataFrame:
         df_inf = pd.DataFrame(INFLATION_DICT)
         ## Merge with survey responses
         df_survey = pd.concat([df_survey, df_inf], ignore_index=True)
-    df_survey["participant.inflation"].replace(
+    df_survey["participant.inflation"] = df_survey["participant.inflation"].replace(
         [430, 1012],
         ["4x30", "10x12"],
-        inplace=True,
     )
 
     return df_survey

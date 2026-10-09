@@ -147,7 +147,7 @@ def create_dynamic_correlation_matrix(
             print(f"{c} p-values: \n{pval[c]}")
 
     if include_stars:
-        p = pval.applymap(
+        p = pval.map(
             lambda x: "" if np.isnan(x) else "".join(["*" for t in p_values if x <= t])
         )
         result = rho.round(decimal_places).astype(str).replace("nan", "")
@@ -194,7 +194,7 @@ def create_pearson_correlation_matrix(
             print(c)
             print(f"{c} p-values: \n{pval[c]}")
     if include_stars:
-        p = pval.applymap(lambda x: "".join(["*" for t in p_values if x <= t]))
+        p = pval.map(lambda x: "".join(["*" for t in p_values if x <= t]))
         return rho.round(decimal_places).astype(str) + p
     return rho.round(decimal_places)
 

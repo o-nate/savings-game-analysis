@@ -27,6 +27,7 @@ from src.utils.constants import (
 )
 from src.utils.database import create_duckdb_database, table_exists
 from src.utils.exp_1_patches import conform_column_names, conform_participant_rounds
+from src.utils.helpers import to_numeric_ignore
 from utils.logging_config import get_logger
 
 # * Logging settings
@@ -333,9 +334,7 @@ def calculate_opportunity_costs(
     df_combine["month"] = df_combine["month"].str.extract("(\d+)")
     ## Convert columns to int, except date
     cols_to_convert = [c for c in df_combine.columns if c != "date"]
-    df_combine[cols_to_convert] = df_combine[cols_to_convert].apply(
-        pd.to_numeric, errors="ignore"
-    )
+    df_combine[cols_to_convert] = df_combine[cols_to_convert].apply(to_numeric_ignore)
     df_combine.sort_values(
         [
             "participant.round",
@@ -393,7 +392,7 @@ def calculate_opportunity_costs(
     ## Remove additional text for inflation sequences
     opt2["participant.inflation"] = opt2["participant.inflation"].str.extract("(\d+)")
     ## Convert data types
-    opt2 = opt2.apply(pd.to_numeric, errors="ignore")
+    opt2 = opt2.apply(to_numeric_ignore)
     ## Combine with participants
     df_opp_cost = df_opp_cost.merge(opt2, how="left")
 
@@ -508,7 +507,7 @@ def calculate_opportunity_costs(
     ## Extract month number
     df_save2["month"] = df_save2["month"].str.extract("(\d+)")
     ## Convert to int
-    df_save2 = df_save2.apply(pd.to_numeric, errors="ignore")
+    df_save2 = df_save2.apply(to_numeric_ignore)
 
     ## Reorder
     df_save2.sort_values(
@@ -618,10 +617,9 @@ def main() -> None:
     dfts = dfts.loc[:, ~dfts.columns.duplicated()].copy()
 
     ## Rename strategies
-    dfts.Strategy.replace(
+    dfts["Strategy"] = dfts["Strategy"].replace(
         ["finalStock", "sgnaive", "sgoptimal"],
         ["Average", "Naïve", "Best"],
-        inplace=True,
     )
     export_figs = input("Export figure? (y) ")
     if experiment_to_graph == 1:

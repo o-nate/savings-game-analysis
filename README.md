@@ -14,7 +14,7 @@ To run this project you need a virtual environment named `savings-game-analysis`
    uv sync
    ```
 
-   Python version follows [`.python-version`](.python-version) (currently 3.10). The project is declared in [`pyproject.toml`](pyproject.toml) with a setuptools build backend; [`uv.lock`](uv.lock) pins the full dependency tree.
+   Python version follows [`.python-version`](.python-version) (currently 3.12). The project is declared in [`pyproject.toml`](pyproject.toml) with a setuptools build backend; [`uv.lock`](uv.lock) pins the full dependency tree.
 
 You can run scripts with `uv run` without activating the environment (for example, `uv run python src/stats_analysis.py`). To activate the environment manually: **Linux / macOS:** `source .venv/bin/activate`; **Windows (cmd):** `.venv\Scripts\activate.bat`; **Windows (PowerShell):** `.venv\Scripts\Activate.ps1`.
 

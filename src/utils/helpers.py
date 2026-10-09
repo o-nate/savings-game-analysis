@@ -14,6 +14,18 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def to_numeric_ignore(series: pd.Series) -> pd.Series:
+    """Convert values to numbers, leaving the series unchanged if that fails.
+
+    Pandas 3 removed ``errors="ignore"`` from ``DataFrame.apply(pd.to_numeric)``.
+    That option converted a column only when every value was numeric.
+    """
+    try:
+        return pd.to_numeric(series, errors="raise")
+    except (ValueError, TypeError):
+        return series
+
+
 def combine_mean_std_dicts(mean_dict, std_dict):
     combined = {}
     for outer_key in mean_dict:

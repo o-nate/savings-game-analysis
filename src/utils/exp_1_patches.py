@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from src.utils.constants import EXP_1_COLUMNS_HASH
+from src.utils.helpers import to_numeric_ignore
 
 ## Define annualized inflation, per 12 months
 INF_1012 = [0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79, 0.45, 60.79]
@@ -61,24 +62,20 @@ def create_survey_df(
     df_survey["Month"] = df_survey["Measure"].str.extract("(\d+)")
     ## Convert to int
     cols_to_convert = [c for c in df_survey.columns if c != "date"]
-    df_survey[cols_to_convert] = df_survey[cols_to_convert].apply(
-        pd.to_numeric, errors="ignore"
-    )
+    df_survey[cols_to_convert] = df_survey[cols_to_convert].apply(to_numeric_ignore)
     ## Rename measures
     df_survey["Measure"] = df_survey["Measure"].str.split("player.").str[1]
-    df_survey["Measure"].replace(
+    df_survey["Measure"] = df_survey["Measure"].replace(
         ["inf_estimate", "inf_expectation"],
         ["Quant Perception", "Quant Expectation"],
-        inplace=True,
     )
     if include_inflation:
         ## Add actual inflation
         df_inf = pd.DataFrame(INFLATION_DICT)
         df_survey = pd.concat([df_survey, df_inf], ignore_index=True)
-    df_survey["participant.inflation"].replace(
+    df_survey["participant.inflation"] = df_survey["participant.inflation"].replace(
         [430, 1012],
         ["4x30", "10x12"],
-        inplace=True,
     )
 
     return df_survey
